@@ -1,0 +1,352 @@
+'use client';
+
+import { useEffect, useRef, useState } from 'react';
+import * as maplibregl from 'maplibre-gl';
+import type { Map as MLMap, Marker } from 'maplibre-gl';
+import { LngLatBounds } from 'maplibre-gl';
+import 'maplibre-gl/dist/maplibre-gl.css';
+import type { Neighborhood, Result } from '@/lib/types';
+import { SERIES } from '@/lib/palette';
+
+/**
+ * Basemap sources — both completely keyless, so the app has no API tokens
+ * anywhere and cannot break because a quota ran out mid-demo.
+ *
+ * Primary: OpenFreeMap vector tiles (free, no key, no rate limit).
+ * Fallback: OpenStreetMap raster, darkened in CSS, used automatically if the
+ * vector style fails to load. Verified live in the browser, not assumed.
+ */
+const VECTOR_STYLE = 'https://tiles.openfreemap.org/styles/positron';
+
+/**
+ * The map STARTS on this style: no network at all, just a background colour.
+ *
+ * This matters more than it looks. MapLibre only fires `load` once its style
+ * resolves, and our data layers are added on `load` — so if a tile server is
+ * slow or unreachable, a network-dependent initial style means the judges see
+ * an entirely empty rectangle: no neighborhoods, no warehouses, no lines.
+ *
+ * Booting blank guarantees the DATA renders instantly and unconditionally.
+ * The basemap is then layered in underneath as an upgrade if it arrives, and
+ * its absence costs us a pretty backdrop rather than the whole visualisation.
+ */
+const BLANK_STYLE: maplibregl.StyleSpecification = {
+  version: 8,
+  sources: {},
+  layers: [{ id: 'bg', type: 'background', paint: { 'background-color': '#0f0f16' } }],
+};
+
+const RASTER_STYLE: maplibregl.StyleSpecification = {
+  version: 8,
+  sources: {
+    osm: {
+      type: 'raster',
+      tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
+      tileSize: 256,
+      attribution: '© OpenStreetMap contributors',
+    },
+  },
+  layers: [{ id: 'osm', type: 'raster', source: 'osm' }],
+};
+
+/** Fetch with a hard timeout, so a hanging network cannot hang the map. */
+async function probe(url: string, ms = 3500): Promise<Response | null> {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), ms);
+  try {
+    const res = await fetch(url, { signal: ctrl.signal });
+    return res.ok ? res : null;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(t);
+  }
+}
+
+/**
+ * Slide a real basemap in underneath the data — but only after PROVING the
+ * source actually responds.
+ *
+ * This ordering is the whole point. Adding a tile source whose requests fail
+ * leaves MapLibre permanently in "style not loaded", and in that state it
+ * paints nothing at all — not the basemap, and not our data either. Verified:
+ * with tiles unreachable, a blindly-added raster source dropped
+ * queryRenderedFeatures() to 0 and the map went completely black.
+ *
+ * So we probe first and only graft what answers. Worst case the backdrop stays
+ * plain and every neighborhood, line and warehouse still renders.
+ */
+async function upgradeBasemap(m: MLMap): Promise<'vector' | 'raster' | 'none'> {
+  const insertBeforeData = (layer: maplibregl.LayerSpecification) => {
+    m.addLayer(layer, m.getLayer('lines') ? 'lines' : undefined);
+  };
+
+  // --- vector (preferred): the style JSON doubles as the reachability probe.
+  const styleRes = await probe(VECTOR_STYLE);
+  if (styleRes) {
+    try {
+      const style = (await styleRes.json()) as maplibregl.StyleSpecification;
+      for (const [id, src] of Object.entries(style.sources ?? {})) {
+        if (!m.getSource(id)) m.addSource(id, src);
+      }
+      for (const layer of style.layers ?? []) {
+        if (layer.type === 'background') continue;
+        if (!m.getLayer(layer.id)) insertBeforeData(layer);
+      }
+      return 'vector';
+    } catch { /* fall through */ }
+  }
+
+  // --- raster fallback: probe one real tile before trusting the source.
+  const tileRes = await probe('https://tile.openstreetmap.org/10/730/438.png');
+  if (tileRes) {
+    try {
+      if (!m.getSource('osm')) {
+        m.addSource('osm', RASTER_STYLE.sources.osm as maplibregl.SourceSpecification);
+      }
+      if (!m.getLayer('osm')) {
+        insertBeforeData({
+          id: 'osm', type: 'raster', source: 'osm',
+          paint: { 'raster-opacity': 0.5, 'raster-saturation': -0.6, 'raster-brightness-max': 0.75 },
+        });
+      }
+      return 'raster';
+    } catch { /* fall through */ }
+  }
+
+  // --- neither reachable: keep the blank backdrop. The data still renders.
+  return 'none';
+}
+
+export type MapMode = 'before' | 'after';
+
+interface Props {
+  neighborhoods: Neighborhood[];
+  result: Result | null;
+  mode: MapMode;
+  focusedWarehouse: string | null;
+}
+
+export default function MapView({ neighborhoods, result, mode, focusedWarehouse }: Props) {
+  const container = useRef<HTMLDivElement>(null);
+  const map = useRef<MLMap | null>(null);
+  const markers = useRef<Marker[]>([]);
+  const [ready, setReady] = useState(false);
+  const fitted = useRef('');
+
+  // ---- create the map once ----
+  useEffect(() => {
+    if (!container.current || map.current) return;
+
+    const m = new maplibregl.Map({
+      container: container.current,
+      style: BLANK_STYLE,
+      center: [77.62, 12.95],
+      zoom: 10.2,
+      attributionControl: { compact: true },
+    });
+    map.current = m;
+    // Debug handle — lets us inspect layers/sources from the console or an
+    // automated browser check without wiring a bespoke bridge each time.
+    if (typeof window !== 'undefined') {
+      (window as unknown as { __gpmap?: MLMap }).__gpmap = m;
+    }
+    m.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
+
+    // Data layers go on as soon as the (instant, offline) blank style is up.
+    m.on('load', () => {
+      setReady(true);
+      void upgradeBasemap(m);
+    });
+
+    // MapLibre measures its container once at construction. In a flex/grid
+    // layout that can happen before the final height is resolved, leaving a
+    // canvas that is the wrong size for the rest of the session (observed:
+    // 898x300 inside an 898x894 box, which hid every marker). Watch the box
+    // and tell the map whenever it actually changes.
+    const ro = new ResizeObserver(() => m.resize());
+    ro.observe(container.current);
+
+    return () => { ro.disconnect(); m.remove(); map.current = null; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ---- draw everything ----
+  useEffect(() => {
+    const m = map.current;
+    if (!m || !ready) return;
+
+    const maxOrders = Math.max(...neighborhoods.map((n) => n.orders), 1);
+    const showResult = mode === 'after' && result && result.warehouses.length > 0;
+
+    const colourOf = (wid: string) => {
+      const i = result?.warehouses.findIndex((w) => w.id === wid) ?? -1;
+      return i >= 0 ? SERIES[i % SERIES.length] : '#7d7d8d';
+    };
+
+    // --- assignment / baseline lines ---
+    const lines = {
+      type: 'FeatureCollection' as const,
+      features: neighborhoods.flatMap((n) => {
+        let target: { lat: number; lon: number } | undefined;
+        let colour = '#7d7d8d';
+        let dim = false;
+
+        if (showResult) {
+          const wid = result!.assignments[n.id];
+          target = result!.warehouses.find((w) => w.id === wid);
+          colour = colourOf(wid);
+          dim = !!focusedWarehouse && focusedWarehouse !== wid;
+        } else if (result?.baseline_warehouse) {
+          target = result.baseline_warehouse;
+        }
+        if (!target) return [];
+
+        return [{
+          type: 'Feature' as const,
+          properties: { colour, opacity: dim ? 0.08 : 0.62, width: dim ? 1 : 2 },
+          geometry: {
+            type: 'LineString' as const,
+            coordinates: [[n.lon, n.lat], [target.lon, target.lat]],
+          },
+        }];
+      }),
+    };
+
+    // --- neighborhood circles ---
+    const points = {
+      type: 'FeatureCollection' as const,
+      features: neighborhoods.map((n) => {
+        const wid = showResult ? result!.assignments[n.id] : '';
+        const dim = showResult && !!focusedWarehouse && focusedWarehouse !== wid;
+        const out = result?.out_of_radius?.includes(n.id) && showResult;
+        return {
+          type: 'Feature' as const,
+          properties: {
+            id: n.id,
+            orders: n.orders,
+            colour: showResult ? colourOf(wid) : '#7d7d8d',
+            radius: 7 + 17 * Math.sqrt(n.orders / maxOrders),
+            opacity: dim ? 0.15 : 0.8,
+            stroke: out ? '#fab219' : '#0a0a0f',
+            strokeW: out ? 2.5 : 1.5,
+          },
+          geometry: { type: 'Point' as const, coordinates: [n.lon, n.lat] },
+        };
+      }),
+    };
+
+    const setData = (id: string, data: GeoJSON.FeatureCollection) => {
+      const src = m.getSource(id) as maplibregl.GeoJSONSource | undefined;
+      if (src) src.setData(data);
+    };
+
+    if (!m.getSource('lines')) {
+      m.addSource('lines', { type: 'geojson', data: lines });
+      m.addLayer({
+        id: 'lines', type: 'line', source: 'lines',
+        layout: { 'line-cap': 'round' },
+        paint: {
+          'line-color': ['get', 'colour'],
+          'line-width': ['get', 'width'],
+          'line-opacity': ['get', 'opacity'],
+        },
+      });
+      m.addSource('points', { type: 'geojson', data: points });
+      m.addLayer({
+        id: 'points', type: 'circle', source: 'points',
+        paint: {
+          'circle-radius': ['get', 'radius'],
+          'circle-color': ['get', 'colour'],
+          'circle-opacity': ['get', 'opacity'],
+          'circle-stroke-color': ['get', 'stroke'],
+          'circle-stroke-width': ['get', 'strokeW'],
+        },
+      });
+
+      const popup = new maplibregl.Popup({ closeButton: false, offset: 12, className: 'gp-pop' });
+      m.on('mouseenter', 'points', (e) => {
+        m.getCanvas().style.cursor = 'pointer';
+        const f = e.features?.[0];
+        if (!f) return;
+        const p = f.properties as { id: string; orders: number };
+        const d = result?.distances_km?.[p.id];
+        popup
+          .setLngLat((f.geometry as GeoJSON.Point).coordinates as [number, number])
+          .setHTML(
+            `<strong>${p.id}</strong><br/>${Number(p.orders).toLocaleString('en-IN')} orders/day` +
+            (d !== undefined && showResult ? `<br/>${d.toFixed(2)} km to depot` : ''),
+          )
+          .addTo(m);
+      });
+      m.on('mouseleave', 'points', () => { m.getCanvas().style.cursor = ''; popup.remove(); });
+    } else {
+      setData('lines', lines);
+      setData('points', points);
+    }
+
+    // --- warehouse markers (HTML, so each carries a visible label:
+    //     identity never rests on colour alone) ---
+    markers.current.forEach((mk) => mk.remove());
+    markers.current = [];
+
+    const addMarker = (
+      lat: number, lon: number, label: string, colour: string, baseline: boolean, dim: boolean,
+    ) => {
+      const el = document.createElement('div');
+      el.style.cssText = `
+        display:flex;align-items:center;gap:5px;padding:4px 9px 4px 5px;
+        background:rgba(13,13,19,.93);border:1.5px solid ${colour};
+        border-radius:99px;font:600 11.5px ui-sans-serif,system-ui,sans-serif;
+        color:#fff;white-space:nowrap;cursor:default;
+        box-shadow:0 3px 14px rgba(0,0,0,.6), 0 0 0 4px ${colour}22;
+        opacity:${dim ? 0.3 : 1};transition:opacity .15s;
+        ${baseline ? 'border-style:dashed;' : ''}`;
+      const dot = document.createElement('span');
+      dot.style.cssText = `width:9px;height:9px;border-radius:50%;background:${colour};flex:none;`;
+      el.appendChild(dot);
+      el.appendChild(document.createTextNode(label));
+      markers.current.push(new maplibregl.Marker({ element: el }).setLngLat([lon, lat]).addTo(m));
+    };
+
+    if (showResult) {
+      result!.warehouses.forEach((w, i) => {
+        const load = result!.load?.[w.id];
+        addMarker(
+          w.lat, w.lon,
+          load ? `${w.id} · ${load.toLocaleString('en-IN')}` : w.id,
+          SERIES[i % SERIES.length], false,
+          !!focusedWarehouse && focusedWarehouse !== w.id,
+        );
+      });
+    } else if (result?.baseline_warehouse) {
+      addMarker(
+        result.baseline_warehouse.lat, result.baseline_warehouse.lon,
+        'Baseline depot', '#7d7d8d', true, false,
+      );
+    }
+
+    // --- fit bounds, but only when the dataset itself changes ---
+    const key = neighborhoods.map((n) => `${n.lat},${n.lon}`).join('|');
+    if (key && key !== fitted.current) {
+      fitted.current = key;
+      const b = new LngLatBounds();
+      neighborhoods.forEach((n) => b.extend([n.lon, n.lat]));
+      if (!b.isEmpty()) m.fitBounds(b, { padding: 90, duration: 700, maxZoom: 13 });
+    }
+  }, [neighborhoods, result, mode, ready, focusedWarehouse]);
+
+  return (
+    <div className="map-wrap">
+      <div ref={container} style={{ position: 'absolute', inset: 0 }} />
+      {!ready && (
+        <div className="map-empty">
+          <div>
+            <div className="spin" style={{ margin: '0 auto 10px' }} />
+            Loading basemap…
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
