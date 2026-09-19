@@ -161,13 +161,45 @@ Every core requirement and **all eight bonus features** from the problem stateme
 
 ---
 
+## Cross-validation — two implementations, one answer
+
+The mathematics was written twice, independently: **Tejas in Python**
+(`python/solver.py` — the reference, and the author of record for the model) and
+**TypeScript** for the browser (`lib/solver.ts`). `npm run crossval` runs both on
+the same dataset and checks they agree.
+
+They are not bit-identical by construction — Python runs Weiszfeld on a local
+tangent-plane projection while TypeScript runs it directly on the sphere with
+haversine, and the restart seeds differ. So the agreement below is a real
+measurement, not a tautology:
+
+```
+   K  |  python (order-km)  typescript (order-km)   gap    worst site gap
+  ----+-------------------------------------------------------------------
+   1  |          55490.66              55490.74   +0.000%        0.000 km
+   2  |          37539.79              37539.82   +0.000%        0.002 km
+   3  |          30378.14              30378.17   +0.000%        0.002 km
+   4  |          23720.15              23720.18   +0.000%        0.000 km
+   5  |          17904.77              17904.80   +0.000%        0.000 km
+```
+
+**Agreement to 0.0001% on cost and ~2 metres on warehouse position.** That is
+the transliteration verified rather than asserted, and it catches the class of
+bug no unit test would — a sign flip, a wrong convergence tolerance, an
+off-by-one in a restart loop.
+
+```bash
+npm run crossval        # needs python3 on PATH
+```
+
 ## Running it
 
 ```bash
 npm install
 npm run dev        # http://localhost:3000
 npm run build      # production build
-npx tsx scripts/test_core.ts   # 56 tests covering the maths and the data layer
+npx tsx scripts/test_core.ts   # 70 tests covering the maths and the data layer
+npm run crossval               # TypeScript vs the Python reference
 ```
 
 Requires Node 20+.
@@ -188,7 +220,14 @@ lib/
   data.ts             Parsing, validation, sample datasets
   palette.ts          Validated colour palette
   ai/columnMapper.ts  The AI component
-scripts/test_core.ts  56 tests
+python/
+  solver.py           Reference implementation (Tejas) — the model of record
+  engine.py           Reference pipeline
+  verifier.py         Independent brute-force checker (Rajath)
+  dump_reference.py   Emits reference output for cross-validation
+scripts/
+  test_core.ts        70 tests
+  cross_validate.ts   TypeScript vs Python agreement check
 ```
 
 ---

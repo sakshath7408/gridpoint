@@ -1,0 +1,5 @@
+# Runtime dependencies for app.py (Streamlit UI + Folium map).
+# The compute modules - solver.py, engine.py, verifier.py - use the Python
+# standard library only and need nothing from this file.
+streamlit
+folium
