@@ -91,7 +91,18 @@ async function upgradeBasemap(m: MLMap): Promise<'vector' | 'raster' | 'none'> {
       }
       for (const layer of style.layers ?? []) {
         if (layer.type === 'background') continue;
-        if (!m.getLayer(layer.id)) insertBeforeData(layer);
+        if (m.getLayer(layer.id)) continue;
+        // Positron is a LIGHT style. Rather than ship a second stylesheet, we
+        // knock every layer back to a low opacity so it reads as a faint grey
+        // substrate on the dark plane — present enough to orient you, quiet
+        // enough that the data is unambiguously the subject.
+        const l = { ...layer } as Record<string, unknown>;
+        const paint = { ...((layer as { paint?: Record<string, unknown> }).paint ?? {}) };
+        if (layer.type === 'fill')   { paint['fill-opacity'] = 0.10; }
+        if (layer.type === 'line')   { paint['line-opacity'] = 0.18; }
+        if (layer.type === 'symbol') { paint['text-opacity'] = 0.34; paint['icon-opacity'] = 0.22; }
+        l.paint = paint;
+        insertBeforeData(l as maplibregl.LayerSpecification);
       }
       return 'vector';
     } catch { /* fall through */ }
@@ -107,7 +118,7 @@ async function upgradeBasemap(m: MLMap): Promise<'vector' | 'raster' | 'none'> {
       if (!m.getLayer('osm')) {
         insertBeforeData({
           id: 'osm', type: 'raster', source: 'osm',
-          paint: { 'raster-opacity': 0.5, 'raster-saturation': -0.6, 'raster-brightness-max': 0.75 },
+          paint: { 'raster-opacity': 0.22, 'raster-saturation': -1, 'raster-brightness-max': 0.6 },
         });
       }
       return 'raster';
@@ -151,7 +162,6 @@ export default function MapView({ neighborhoods, result, mode, focusedWarehouse 
     if (typeof window !== 'undefined') {
       (window as unknown as { __gpmap?: MLMap }).__gpmap = m;
     }
-    m.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
 
     // Data layers go on as soon as the (instant, offline) blank style is up.
     m.on('load', () => {
@@ -204,7 +214,7 @@ export default function MapView({ neighborhoods, result, mode, focusedWarehouse 
 
         return [{
           type: 'Feature' as const,
-          properties: { colour, opacity: dim ? 0.08 : 0.62, width: dim ? 1 : 2 },
+          properties: { colour, opacity: dim ? 0.05 : 0.30, width: 1 },
           geometry: {
             type: 'LineString' as const,
             coordinates: [[n.lon, n.lat], [target.lon, target.lat]],
@@ -225,11 +235,15 @@ export default function MapView({ neighborhoods, result, mode, focusedWarehouse 
           properties: {
             id: n.id,
             orders: n.orders,
-            colour: showResult ? colourOf(wid) : '#7d7d8d',
-            radius: 7 + 17 * Math.sqrt(n.orders / maxOrders),
-            opacity: dim ? 0.15 : 0.8,
-            stroke: out ? '#fab219' : '#0a0a0f',
-            strokeW: out ? 2.5 : 1.5,
+            // Tint, don't saturate. The fill is a wash of the warehouse colour
+            // so the grouping is legible at a glance; the ring carries the
+            // actual hue. Before a run everything is plain neutral.
+            colour: showResult ? colourOf(wid) : '#8a8a96',
+            radius: 5 + 13 * Math.sqrt(n.orders / maxOrders),
+            opacity: dim ? 0.06 : showResult ? 0.20 : 0.16,
+            stroke: out ? '#fab219' : showResult ? colourOf(wid) : '#9a9aa6',
+            strokeW: out ? 1.6 : 1.1,
+            strokeOpacity: dim ? 0.15 : out ? 0.95 : 0.75,
           },
           geometry: { type: 'Point' as const, coordinates: [n.lon, n.lat] },
         };
@@ -261,6 +275,7 @@ export default function MapView({ neighborhoods, result, mode, focusedWarehouse 
           'circle-opacity': ['get', 'opacity'],
           'circle-stroke-color': ['get', 'stroke'],
           'circle-stroke-width': ['get', 'strokeW'],
+          'circle-stroke-opacity': ['get', 'strokeOpacity'],
         },
       });
 
@@ -295,15 +310,16 @@ export default function MapView({ neighborhoods, result, mode, focusedWarehouse 
     ) => {
       const el = document.createElement('div');
       el.style.cssText = `
-        display:flex;align-items:center;gap:5px;padding:4px 9px 4px 5px;
-        background:rgba(13,13,19,.93);border:1.5px solid ${colour};
-        border-radius:99px;font:600 11.5px ui-sans-serif,system-ui,sans-serif;
-        color:#fff;white-space:nowrap;cursor:default;
-        box-shadow:0 3px 14px rgba(0,0,0,.6), 0 0 0 4px ${colour}22;
-        opacity:${dim ? 0.3 : 1};transition:opacity .15s;
+        display:flex;align-items:center;gap:6px;padding:3px 9px 3px 4px;
+        background:rgba(14,14,17,.88);backdrop-filter:blur(12px);
+        border:1px solid ${baseline ? 'rgba(255,255,255,.18)' : colour + '66'};
+        border-radius:99px;font:600 11px ui-sans-serif,system-ui,sans-serif;
+        color:#ededf0;white-space:nowrap;cursor:default;letter-spacing:-.01em;
+        box-shadow:0 4px 16px rgba(0,0,0,.55);
+        opacity:${dim ? 0.25 : 1};transition:opacity .15s;
         ${baseline ? 'border-style:dashed;' : ''}`;
       const dot = document.createElement('span');
-      dot.style.cssText = `width:9px;height:9px;border-radius:50%;background:${colour};flex:none;`;
+      dot.style.cssText = `width:7px;height:7px;border-radius:50%;background:${colour};flex:none;`;
       el.appendChild(dot);
       el.appendChild(document.createTextNode(label));
       markers.current.push(new maplibregl.Marker({ element: el }).setLngLat([lon, lat]).addTo(m));
