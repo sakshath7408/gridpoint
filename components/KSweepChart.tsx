@@ -48,7 +48,7 @@ export default function KSweepChart({ points, optimalK, currentK, onPick }: Prop
   const hoveredPoint = hover !== null ? points[hover] : null;
 
   return (
-    <div style={{ position: 'relative' }}>
+    <div style={{ position: 'relative', maxWidth: 400 }}>
       <svg
         viewBox={`0 0 ${W} ${H}`}
         width="100%"

@@ -1,4 +1,8 @@
 import type { Metadata, Viewport } from 'next';
+// Inter 4 with the optical-size axis: the same face tightens automatically at
+// display sizes. Self-hosted (bundled by Next), so there is no runtime request
+// to a font CDN that could fail or shift the layout during the demo.
+import '@fontsource-variable/inter/opsz.css';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -11,7 +15,7 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
-  themeColor: '#0a0a0f',
+  themeColor: '#09090b',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

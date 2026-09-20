@@ -98,9 +98,9 @@ async function upgradeBasemap(m: MLMap): Promise<'vector' | 'raster' | 'none'> {
         // enough that the data is unambiguously the subject.
         const l = { ...layer } as Record<string, unknown>;
         const paint = { ...((layer as { paint?: Record<string, unknown> }).paint ?? {}) };
-        if (layer.type === 'fill')   { paint['fill-opacity'] = 0.10; }
-        if (layer.type === 'line')   { paint['line-opacity'] = 0.18; }
-        if (layer.type === 'symbol') { paint['text-opacity'] = 0.34; paint['icon-opacity'] = 0.22; }
+        if (layer.type === 'fill')   { paint['fill-opacity'] = 0.07; }
+        if (layer.type === 'line')   { paint['line-opacity'] = 0.13; }
+        if (layer.type === 'symbol') { paint['text-opacity'] = 0.30; paint['icon-opacity'] = 0.18; }
         l.paint = paint;
         insertBeforeData(l as maplibregl.LayerSpecification);
       }
@@ -118,7 +118,7 @@ async function upgradeBasemap(m: MLMap): Promise<'vector' | 'raster' | 'none'> {
       if (!m.getLayer('osm')) {
         insertBeforeData({
           id: 'osm', type: 'raster', source: 'osm',
-          paint: { 'raster-opacity': 0.22, 'raster-saturation': -1, 'raster-brightness-max': 0.6 },
+          paint: { 'raster-opacity': 0.18, 'raster-saturation': -1, 'raster-brightness-max': 0.55 },
         });
       }
       return 'raster';
@@ -144,6 +144,7 @@ export default function MapView({ neighborhoods, result, mode, focusedWarehouse 
   const markers = useRef<Marker[]>([]);
   const [ready, setReady] = useState(false);
   const fitted = useRef('');
+  const lastMode = useRef<MapMode>('before');
 
   // ---- create the map once ----
   useEffect(() => {
@@ -305,23 +306,31 @@ export default function MapView({ neighborhoods, result, mode, focusedWarehouse 
     markers.current.forEach((mk) => mk.remove());
     markers.current = [];
 
+    // Markers pulse once when the optimised network first appears, so the eye
+    // is led to the answer. Styled from globals.css (.gp-marker) so the map
+    // chrome and the panels share one design system.
+    const justRevealed = !!showResult && lastMode.current !== 'after';
+    lastMode.current = showResult ? 'after' : 'before';
+
     const addMarker = (
-      lat: number, lon: number, label: string, colour: string, baseline: boolean, dim: boolean,
+      lat: number, lon: number, label: string, load: string | null, colour: string,
+      baseline: boolean, dim: boolean, pulse: boolean,
     ) => {
       const el = document.createElement('div');
-      el.style.cssText = `
-        display:flex;align-items:center;gap:6px;padding:3px 9px 3px 4px;
-        background:rgba(14,14,17,.88);backdrop-filter:blur(12px);
-        border:1px solid ${baseline ? 'rgba(255,255,255,.18)' : colour + '66'};
-        border-radius:99px;font:600 11px ui-sans-serif,system-ui,sans-serif;
-        color:#ededf0;white-space:nowrap;cursor:default;letter-spacing:-.01em;
-        box-shadow:0 4px 16px rgba(0,0,0,.55);
-        opacity:${dim ? 0.25 : 1};transition:opacity .15s;
-        ${baseline ? 'border-style:dashed;' : ''}`;
-      const dot = document.createElement('span');
-      dot.style.cssText = `width:7px;height:7px;border-radius:50%;background:${colour};flex:none;`;
-      el.appendChild(dot);
+      el.className = `gp-marker${baseline ? ' baseline' : ''}${dim ? ' dim' : ''}${pulse ? ' pulse' : ''}`;
+      el.style.setProperty('--mk', baseline ? 'rgba(255,255,255,.28)' : colour);
+      if (!baseline) {
+        const sq = document.createElement('span');
+        sq.className = 'sq';
+        el.appendChild(sq);
+      }
       el.appendChild(document.createTextNode(label));
+      if (load) {
+        const ld = document.createElement('span');
+        ld.className = 'load';
+        ld.textContent = `· ${load}`;
+        el.appendChild(ld);
+      }
       markers.current.push(new maplibregl.Marker({ element: el }).setLngLat([lon, lat]).addTo(m));
     };
 
@@ -329,16 +338,17 @@ export default function MapView({ neighborhoods, result, mode, focusedWarehouse 
       result!.warehouses.forEach((w, i) => {
         const load = result!.load?.[w.id];
         addMarker(
-          w.lat, w.lon,
-          load ? `${w.id} · ${load.toLocaleString('en-IN')}` : w.id,
+          w.lat, w.lon, w.id,
+          load ? load.toLocaleString('en-IN') : null,
           SERIES[i % SERIES.length], false,
           !!focusedWarehouse && focusedWarehouse !== w.id,
+          justRevealed,
         );
       });
     } else if (result?.baseline_warehouse) {
       addMarker(
         result.baseline_warehouse.lat, result.baseline_warehouse.lon,
-        'Baseline depot', '#7d7d8d', true, false,
+        'Baseline depot', null, '#7d7d8d', true, false, false,
       );
     }
 

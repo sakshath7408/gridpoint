@@ -247,6 +247,7 @@ our own work.*
 | [`Xenova/all-MiniLM-L6-v2`](https://huggingface.co/Xenova/all-MiniLM-L6-v2) | Apache-2.0 | The embedding model itself |
 | [TypeScript](https://www.typescriptlang.org) | Apache-2.0 | Language |
 | [tsx](https://github.com/privatenumber/tsx) | MIT | Running the test script |
+| [Inter](https://rsms.me/inter/) via [Fontsource](https://fontsource.org) | OFL-1.1 | Typeface, self-hosted (no font CDN request at runtime) |
 | [OpenFreeMap](https://openfreemap.org) | free, no key | Vector basemap tiles |
 | [OpenStreetMap](https://www.openstreetmap.org/copyright) | ODbL | Basemap data and raster fallback |
 

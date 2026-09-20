@@ -21,12 +21,18 @@ export const SERIES = [
   '#e66767', // 8 red
 ] as const;
 
-/** Chart roles. Only the first two slots are used together, all-pairs validated. */
+/**
+ * Chart roles. The trade-off chart has two series, so it does not draw on the
+ * categorical slots at all: the part the optimiser can move (delivery) takes
+ * the product accent, and the part it cannot (rent) is a neutral. The pair is
+ * separated by lightness (L* ≈ 68 vs 42) as well as hue, so it survives every
+ * colour-vision deficiency, and the legend is always drawn.
+ */
 export const CHART = {
-  delivery: SERIES[0],
-  infrastructure: SERIES[1],
+  delivery: '#a78bfa',
+  infrastructure: '#5a5a68',
   baseline: '#7d7d8d',
-  accent: '#8b5cf6',
+  accent: '#a78bfa',
 } as const;
 
 export const STATUS = {
