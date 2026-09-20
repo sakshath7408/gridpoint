@@ -370,7 +370,11 @@ export default function Page() {
             <button aria-pressed={mapMode === 'after'} onClick={() => setMapMode('after')}>After</button>
           </div>
         )}
+        {/* aria-label, not title alone: a bare title becomes the accessible
+            name, so screen readers announced this button as "⌘ Enter". */}
         <button className="btn primary" onClick={() => void handleRun()} disabled={!validation.ok || busy}
+                aria-label={busy ? 'Solving' : hasRun ? 'Re-run the optimisation' : 'Optimise'}
+                aria-keyshortcuts="Meta+Enter Control+Enter"
                 title="⌘ Enter / Ctrl Enter">
           {busy ? <><span className="spin" /> Solving</> : hasRun ? 'Re-run' : 'Optimise'}
           {!busy && <span className="kbd">⌘↩</span>}

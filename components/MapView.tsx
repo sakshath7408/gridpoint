@@ -353,12 +353,27 @@ export default function MapView({ neighborhoods, result, mode, focusedWarehouse 
     }
 
     // --- fit bounds, but only when the dataset itself changes ---
+    //
+    // The panels FLOAT over the map, so the canvas is wider than the part of it
+    // the user can actually see. Fitting to the full canvas pushes points
+    // underneath the panels — invisible, and worse, silently: the default
+    // sample happens to sit mid-canvas so it looks correct. Pad by the real
+    // occluded widths instead. Below 1240px the panels stack (see globals.css),
+    // so the whole canvas is visible and the padding goes back to symmetric.
     const key = neighborhoods.map((n) => `${n.lat},${n.lon}`).join('|');
     if (key && key !== fitted.current) {
       fitted.current = key;
       const b = new LngLatBounds();
       neighborhoods.forEach((n) => b.extend([n.lon, n.lat]));
-      if (!b.isEmpty()) m.fitBounds(b, { padding: 90, duration: 700, maxZoom: 13 });
+      const floating = typeof window !== 'undefined' && window.innerWidth > 1240;
+      // left panel 300 + gutter, right panel 360 + gutter, header 46 + gutter,
+      // then a little breathing room so markers are not flush against a panel.
+      const padding = floating
+        ? { left: 340, right: 400, top: 110, bottom: 70 }
+        : 60;
+      // A marker label is ~110px wide and hangs off its point, so cap the zoom
+      // low enough that two nearby depots do not overlap into mush.
+      if (!b.isEmpty()) m.fitBounds(b, { padding, duration: 700, maxZoom: 13 });
     }
   }, [neighborhoods, result, mode, ready, focusedWarehouse]);
 
