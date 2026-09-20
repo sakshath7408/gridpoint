@@ -1,5 +1,7 @@
 # Sludge — *Where should the warehouse go?*
 
+### by Sakshath, Tejas and Rajath
+
 **Hack-a-Matics 2026** · Pentagram (Mathematical Society of BMSCE) × BMSCE IEEE Computer Society
 Theme: **VECTOR** · Problem statement 1: **GRIDPOINT**
 
