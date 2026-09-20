@@ -753,7 +753,7 @@ export default function Page() {
           <span className="logo-sub">Where should the warehouse go?</span>
         </div>
         <div className="head-spacer" />
-        <a className="btn sm" href="/manual" title="User manual and mathematical reference">How to use?</a>
+        <a className="btn sm" href="/manual" title="User manual and mathematical reference">User Guide</a>
         <button id="btn-cov" className="btn sm cov-btn" onClick={() => setCovOpen(true)}
                 aria-label="Show requirement coverage">
           {Icon.check}<span>All 17 features</span>
@@ -987,7 +987,7 @@ export default function Page() {
           </Fold>
         </div>
         <footer className="panel-foot">
-          <a href="/manual">How to use?</a>
+          <a href="/manual">User Guide</a>
           <a href="https://github.com/sakshath7408/gridpoint" target="_blank" rel="noreferrer">Source ↗</a>
         </footer>
       </aside>
