@@ -269,8 +269,17 @@ export function validate(neighborhoods: unknown): ValidationResult {
 // ---------------------------------------------------------------------------
 // Sample datasets
 // ---------------------------------------------------------------------------
-// Approximate locality centroids for Bengaluru (within roughly a kilometre).
-// Order counts are invented demand figures for demonstration.
+// Seven Indian metros. Coordinates are approximate locality CENTROIDS, good to
+// roughly a kilometre — which is the right precision for this model, because a
+// "neighborhood" here is the demand centre of an area several kilometres
+// across, not a survey point. Each set is validated geometrically: every zone
+// inside its city's metro bounding box, no transposed lat/lon, no duplicate
+// coordinates, and a spread consistent with a single delivery region.
+//
+// Order counts are INVENTED demand figures for demonstration. They are shaped
+// to be plausible — tech corridors and satellite townships order more than old
+// central districts — but they are not real company data and are not presented
+// as such.
 
 export const SAMPLES: Record<string, Neighborhood[]> = {
   'Bengaluru — 12 zones': [
@@ -287,6 +296,73 @@ export const SAMPLES: Record<string, Neighborhood[]> = {
     { id: 'Banashankari',    lat: 12.9250, lon: 77.5667, orders: 230 },
     { id: 'Malleshwaram',    lat: 13.0035, lon: 77.5709, orders: 200 },
   ],
+  'Delhi NCR — 10 zones': [
+    { id: 'Connaught Place', lat: 28.6304, lon: 77.2177, orders: 340 },
+    { id: 'Karol Bagh',      lat: 28.6519, lon: 77.1909, orders: 290 },
+    { id: 'Saket',           lat: 28.5245, lon: 77.2066, orders: 380 },
+    { id: 'Dwarka',          lat: 28.5921, lon: 77.0460, orders: 520 },
+    { id: 'Rohini',          lat: 28.7495, lon: 77.0565, orders: 460 },
+    { id: 'Lajpat Nagar',    lat: 28.5677, lon: 77.2433, orders: 310 },
+    { id: 'Vasant Kunj',     lat: 28.5200, lon: 77.1591, orders: 270 },
+    { id: 'Noida Sec 18',    lat: 28.5707, lon: 77.3260, orders: 590 },
+    { id: 'Gurugram Cyber',  lat: 28.4950, lon: 77.0890, orders: 640 },
+    { id: 'Shahdara',        lat: 28.6730, lon: 77.2890, orders: 250 },
+  ],
+  'Mumbai — 9 zones': [
+    { id: 'Andheri',    lat: 19.1197, lon: 72.8468, orders: 520 },
+    { id: 'Bandra',     lat: 19.0596, lon: 72.8295, orders: 410 },
+    { id: 'Dadar',      lat: 19.0178, lon: 72.8478, orders: 330 },
+    { id: 'Powai',      lat: 19.1176, lon: 72.9060, orders: 290 },
+    { id: 'Borivali',   lat: 19.2307, lon: 72.8567, orders: 380 },
+    { id: 'Thane',      lat: 19.2183, lon: 72.9781, orders: 450 },
+    { id: 'Navi Mumbai',lat: 19.0330, lon: 73.0297, orders: 400 },
+    { id: 'Colaba',     lat: 18.9067, lon: 72.8147, orders: 170 },
+    { id: 'Malad',      lat: 19.1868, lon: 72.8489, orders: 360 },
+  ],
+  'Hyderabad — 9 zones': [
+    { id: 'Banjara Hills',   lat: 17.4156, lon: 78.4347, orders: 330 },
+    { id: 'Jubilee Hills',   lat: 17.4326, lon: 78.4071, orders: 300 },
+    { id: 'Gachibowli',      lat: 17.4401, lon: 78.3489, orders: 580 },
+    { id: 'HITEC City',      lat: 17.4435, lon: 78.3772, orders: 620 },
+    { id: 'Kukatpally',      lat: 17.4849, lon: 78.4138, orders: 410 },
+    { id: 'Secunderabad',    lat: 17.4399, lon: 78.4983, orders: 350 },
+    { id: 'Ameerpet',        lat: 17.4374, lon: 78.4487, orders: 290 },
+    { id: 'LB Nagar',        lat: 17.3457, lon: 78.5522, orders: 320 },
+    { id: 'Kompally',        lat: 17.5370, lon: 78.4870, orders: 190 },
+  ],
+  'Chennai — 9 zones': [
+    { id: 'T. Nagar',        lat: 13.0418, lon: 80.2341, orders: 380 },
+    { id: 'Adyar',           lat: 13.0012, lon: 80.2565, orders: 320 },
+    { id: 'Velachery',       lat: 12.9815, lon: 80.2180, orders: 400 },
+    { id: 'Anna Nagar',      lat: 13.0850, lon: 80.2101, orders: 350 },
+    { id: 'Guindy',          lat: 13.0067, lon: 80.2206, orders: 290 },
+    { id: 'Sholinganallur',  lat: 12.9010, lon: 80.2279, orders: 560 },
+    { id: 'Mylapore',        lat: 13.0339, lon: 80.2698, orders: 260 },
+    { id: 'Porur',           lat: 13.0381, lon: 80.1565, orders: 330 },
+    { id: 'Ambattur',        lat: 13.1143, lon: 80.1548, orders: 300 },
+  ],
+  'Pune — 9 zones': [
+    { id: 'Koregaon Park',   lat: 18.5362, lon: 73.8939, orders: 300 },
+    { id: 'Hinjewadi',       lat: 18.5936, lon: 73.7301, orders: 610 },
+    { id: 'Kothrud',         lat: 18.5074, lon: 73.8077, orders: 340 },
+    { id: 'Viman Nagar',     lat: 18.5679, lon: 73.9143, orders: 380 },
+    { id: 'Hadapsar',        lat: 18.5089, lon: 73.9260, orders: 420 },
+    { id: 'Baner',           lat: 18.5590, lon: 73.7868, orders: 390 },
+    { id: 'Camp',            lat: 18.5136, lon: 73.8788, orders: 250 },
+    { id: 'Wakad',           lat: 18.5975, lon: 73.7626, orders: 360 },
+    { id: 'Katraj',          lat: 18.4488, lon: 73.8600, orders: 220 },
+  ],
+  'Kolkata — 9 zones': [
+    { id: 'Park Street',     lat: 22.5535, lon: 88.3520, orders: 320 },
+    { id: 'Salt Lake',       lat: 22.5867, lon: 88.4171, orders: 480 },
+    { id: 'New Town',        lat: 22.5800, lon: 88.4600, orders: 440 },
+    { id: 'Ballygunge',      lat: 22.5254, lon: 88.3661, orders: 300 },
+    { id: 'Howrah',          lat: 22.5958, lon: 88.2636, orders: 410 },
+    { id: 'Behala',          lat: 22.4989, lon: 88.3186, orders: 290 },
+    { id: 'Dum Dum',         lat: 22.6420, lon: 88.4312, orders: 270 },
+    { id: 'Garia',           lat: 22.4620, lon: 88.3900, orders: 310 },
+    { id: 'Rajarhat',        lat: 22.6190, lon: 88.4530, orders: 230 },
+  ],
   'Bengaluru — 8 zones': [
     { id: 'Koramangala',     lat: 12.9352, lon: 77.6245, orders: 420 },
     { id: 'Indiranagar',     lat: 12.9784, lon: 77.6408, orders: 310 },
@@ -302,17 +378,6 @@ export const SAMPLES: Record<string, Neighborhood[]> = {
     { id: 'Indiranagar', lat: 12.9784, lon: 77.6408, orders: 310 },
     { id: 'Jayanagar',   lat: 12.9250, lon: 77.5938, orders: 260 },
     { id: 'Whitefield',  lat: 12.9698, lon: 77.7500, orders: 540 },
-  ],
-  'Mumbai — 9 zones': [
-    { id: 'Andheri',    lat: 19.1197, lon: 72.8468, orders: 520 },
-    { id: 'Bandra',     lat: 19.0596, lon: 72.8295, orders: 410 },
-    { id: 'Dadar',      lat: 19.0178, lon: 72.8478, orders: 330 },
-    { id: 'Powai',      lat: 19.1176, lon: 72.9060, orders: 290 },
-    { id: 'Borivali',   lat: 19.2307, lon: 72.8567, orders: 380 },
-    { id: 'Thane',      lat: 19.2183, lon: 72.9781, orders: 450 },
-    { id: 'Navi Mumbai',lat: 19.0330, lon: 73.0297, orders: 400 },
-    { id: 'Colaba',     lat: 18.9067, lon: 72.8147, orders: 170 },
-    { id: 'Malad',      lat: 19.1868, lon: 72.8489, orders: 360 },
   ],
 };
 
