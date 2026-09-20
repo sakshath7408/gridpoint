@@ -15,13 +15,14 @@
 
 import { useState } from 'react';
 import type { KSweepPoint } from '@/lib/engine';
-import { CHART, INK } from '@/lib/palette';
+import { chartFor, inkFor, type Theme } from '@/lib/palette';
 
 interface Props {
   points: KSweepPoint[];
   optimalK: number;
   currentK: number;
   onPick: (k: number) => void;
+  theme: Theme;
 }
 
 const W = 340, H = 186;
@@ -31,8 +32,10 @@ const inr = (n: number) =>
   n >= 1000 ? `₹${(n / 1000).toFixed(n >= 10000 ? 0 : 1)}k` : `₹${Math.round(n)}`;
 const inrFull = (n: number) => `₹${Math.round(n).toLocaleString('en-IN')}`;
 
-export default function KSweepChart({ points, optimalK, currentK, onPick }: Props) {
+export default function KSweepChart({ points, optimalK, currentK, onPick, theme }: Props) {
   const [hover, setHover] = useState<number | null>(null);
+  const CHART = chartFor(theme);
+  const INK = inkFor(theme);
   if (points.length === 0) return null;
 
   const plotW = W - PAD.l - PAD.r;
@@ -181,7 +184,7 @@ export default function KSweepChart({ points, optimalK, currentK, onPick }: Prop
             <i style={{ background: CHART.infrastructure }} />Facilities
             <span>{inrFull(hoveredPoint.infrastructure)}</span>
           </div>
-          <div className="r" style={{ borderTop: '1px solid rgba(255,255,255,.1)', marginTop: 4, paddingTop: 4 }}>
+          <div className="r" style={{ borderTop: '1px solid var(--line)', marginTop: 4, paddingTop: 4 }}>
             <i style={{ background: 'transparent' }} />Total
             <span>{inrFull(hoveredPoint.total)}/day</span>
           </div>

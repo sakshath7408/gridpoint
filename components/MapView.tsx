@@ -6,7 +6,7 @@ import type { Map as MLMap, Marker } from 'maplibre-gl';
 import { LngLatBounds } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import type { Neighborhood, Result } from '@/lib/types';
-import { SERIES } from '@/lib/palette';
+import { seriesFor, MAP_NEUTRAL, type Theme } from '@/lib/palette';
 
 /**
  * Basemap sources — both completely keyless, so the app has no API tokens
@@ -30,11 +30,24 @@ const VECTOR_STYLE = 'https://tiles.openfreemap.org/styles/positron';
  * The basemap is then layered in underneath as an upgrade if it arrives, and
  * its absence costs us a pretty backdrop rather than the whole visualisation.
  */
-const BLANK_STYLE: maplibregl.StyleSpecification = {
+const blankStyle = (theme: Theme): maplibregl.StyleSpecification => ({
   version: 8,
   sources: {},
-  layers: [{ id: 'bg', type: 'background', paint: { 'background-color': '#0f0f16' } }],
-};
+  layers: [{ id: 'bg', type: 'background', paint: { 'background-color': MAP_NEUTRAL[theme].bg } }],
+});
+
+/**
+ * How hard to knock the basemap back, per theme.
+ *
+ * Positron is a light style. On paper it can run near full strength; on the
+ * dark plane the same layers must drop to a faint grey substrate or they glow.
+ * Stored so the theme toggle can repaint grafted layers in place rather than
+ * tearing the style down and rebuilding it.
+ */
+const BASEMAP_PAINT = {
+  light: { fill: 0.72, line: 0.55, text: 0.62, icon: 0.4,  raster: 0.5  },
+  dark:  { fill: 0.07, line: 0.13, text: 0.30, icon: 0.18, raster: 0.18 },
+} as const;
 
 const RASTER_STYLE: maplibregl.StyleSpecification = {
   version: 8,
@@ -76,7 +89,8 @@ async function probe(url: string, ms = 3500): Promise<Response | null> {
  * So we probe first and only graft what answers. Worst case the backdrop stays
  * plain and every neighborhood, line and warehouse still renders.
  */
-async function upgradeBasemap(m: MLMap): Promise<'vector' | 'raster' | 'none'> {
+async function upgradeBasemap(m: MLMap, theme: Theme, grafted: string[]): Promise<'vector' | 'raster' | 'none'> {
+  const P = BASEMAP_PAINT[theme];
   const insertBeforeData = (layer: maplibregl.LayerSpecification) => {
     m.addLayer(layer, m.getLayer('lines') ? 'lines' : undefined);
   };
@@ -92,17 +106,18 @@ async function upgradeBasemap(m: MLMap): Promise<'vector' | 'raster' | 'none'> {
       for (const layer of style.layers ?? []) {
         if (layer.type === 'background') continue;
         if (m.getLayer(layer.id)) continue;
-        // Positron is a LIGHT style. Rather than ship a second stylesheet, we
-        // knock every layer back to a low opacity so it reads as a faint grey
-        // substrate on the dark plane — present enough to orient you, quiet
-        // enough that the data is unambiguously the subject.
+        // At full strength the basemap competes with the data. Soften every
+        // layer so streets and labels read as context — present enough to
+        // orient you, quiet enough that the circles and markers are
+        // unambiguously the subject. How far to soften depends on the theme.
         const l = { ...layer } as Record<string, unknown>;
         const paint = { ...((layer as { paint?: Record<string, unknown> }).paint ?? {}) };
-        if (layer.type === 'fill')   { paint['fill-opacity'] = 0.07; }
-        if (layer.type === 'line')   { paint['line-opacity'] = 0.13; }
-        if (layer.type === 'symbol') { paint['text-opacity'] = 0.30; paint['icon-opacity'] = 0.18; }
+        if (layer.type === 'fill')   { paint['fill-opacity'] = P.fill; }
+        if (layer.type === 'line')   { paint['line-opacity'] = P.line; }
+        if (layer.type === 'symbol') { paint['text-opacity'] = P.text; paint['icon-opacity'] = P.icon; }
         l.paint = paint;
         insertBeforeData(l as maplibregl.LayerSpecification);
+        grafted.push(layer.id);
       }
       return 'vector';
     } catch { /* fall through */ }
@@ -118,8 +133,11 @@ async function upgradeBasemap(m: MLMap): Promise<'vector' | 'raster' | 'none'> {
       if (!m.getLayer('osm')) {
         insertBeforeData({
           id: 'osm', type: 'raster', source: 'osm',
-          paint: { 'raster-opacity': 0.18, 'raster-saturation': -1, 'raster-brightness-max': 0.55 },
+          paint: theme === 'light'
+            ? { 'raster-opacity': P.raster, 'raster-saturation': -1, 'raster-brightness-min': 0.35 }
+            : { 'raster-opacity': P.raster, 'raster-saturation': -1, 'raster-brightness-max': 0.55 },
         });
+        grafted.push('osm');
       }
       return 'raster';
     } catch { /* fall through */ }
@@ -136,15 +154,23 @@ interface Props {
   result: Result | null;
   mode: MapMode;
   focusedWarehouse: string | null;
+  theme: Theme;
 }
 
-export default function MapView({ neighborhoods, result, mode, focusedWarehouse }: Props) {
+export default function MapView({ neighborhoods, result, mode, focusedWarehouse, theme }: Props) {
   const container = useRef<HTMLDivElement>(null);
   const map = useRef<MLMap | null>(null);
   const markers = useRef<Marker[]>([]);
   const [ready, setReady] = useState(false);
   const fitted = useRef('');
   const lastMode = useRef<MapMode>('before');
+  // Ids of the basemap layers we grafted, so a theme switch can repaint them
+  // in place. Rebuilding the style instead would drop our data layers and
+  // re-run the whole probe — a visible flicker on every toggle.
+  const grafted = useRef<string[]>([]);
+  // Read inside the map-creation effect, which must not re-run on theme change.
+  const themeRef = useRef<Theme>(theme);
+  themeRef.current = theme;
 
   // ---- create the map once ----
   useEffect(() => {
@@ -152,7 +178,7 @@ export default function MapView({ neighborhoods, result, mode, focusedWarehouse 
 
     const m = new maplibregl.Map({
       container: container.current,
-      style: BLANK_STYLE,
+      style: blankStyle(themeRef.current),
       center: [77.62, 12.95],
       zoom: 10.2,
       attributionControl: { compact: true },
@@ -167,7 +193,7 @@ export default function MapView({ neighborhoods, result, mode, focusedWarehouse 
     // Data layers go on as soon as the (instant, offline) blank style is up.
     m.on('load', () => {
       setReady(true);
-      void upgradeBasemap(m);
+      void upgradeBasemap(m, themeRef.current, grafted.current);
     });
 
     // MapLibre measures its container once at construction. In a flex/grid
@@ -190,9 +216,12 @@ export default function MapView({ neighborhoods, result, mode, focusedWarehouse 
     const maxOrders = Math.max(...neighborhoods.map((n) => n.orders), 1);
     const showResult = mode === 'after' && result && result.warehouses.length > 0;
 
+    const SERIES = seriesFor(theme);
+    const NEUTRAL = MAP_NEUTRAL[theme];
+
     const colourOf = (wid: string) => {
       const i = result?.warehouses.findIndex((w) => w.id === wid) ?? -1;
-      return i >= 0 ? SERIES[i % SERIES.length] : '#7d7d8d';
+      return i >= 0 ? SERIES[i % SERIES.length] : NEUTRAL.baseline;
     };
 
     // --- assignment / baseline lines ---
@@ -200,7 +229,7 @@ export default function MapView({ neighborhoods, result, mode, focusedWarehouse 
       type: 'FeatureCollection' as const,
       features: neighborhoods.flatMap((n) => {
         let target: { lat: number; lon: number } | undefined;
-        let colour = '#7d7d8d';
+        let colour: string = NEUTRAL.baseline;
         let dim = false;
 
         if (showResult) {
@@ -215,7 +244,7 @@ export default function MapView({ neighborhoods, result, mode, focusedWarehouse 
 
         return [{
           type: 'Feature' as const,
-          properties: { colour, opacity: dim ? 0.05 : 0.30, width: 1 },
+          properties: { colour, opacity: dim ? 0.06 : 0.42, width: 1.2 },
           geometry: {
             type: 'LineString' as const,
             coordinates: [[n.lon, n.lat], [target.lon, target.lat]],
@@ -239,12 +268,12 @@ export default function MapView({ neighborhoods, result, mode, focusedWarehouse 
             // Tint, don't saturate. The fill is a wash of the warehouse colour
             // so the grouping is legible at a glance; the ring carries the
             // actual hue. Before a run everything is plain neutral.
-            colour: showResult ? colourOf(wid) : '#8a8a96',
+            colour: showResult ? colourOf(wid) : NEUTRAL.fill,
             radius: 5 + 13 * Math.sqrt(n.orders / maxOrders),
-            opacity: dim ? 0.06 : showResult ? 0.20 : 0.16,
-            stroke: out ? '#fab219' : showResult ? colourOf(wid) : '#9a9aa6',
+            opacity: dim ? 0.06 : showResult ? 0.22 : 0.14,
+            stroke: out ? NEUTRAL.warn : showResult ? colourOf(wid) : NEUTRAL.stroke,
             strokeW: out ? 1.6 : 1.1,
-            strokeOpacity: dim ? 0.15 : out ? 0.95 : 0.75,
+            strokeOpacity: dim ? 0.15 : out ? 1 : 0.9,
           },
           geometry: { type: 'Point' as const, coordinates: [n.lon, n.lat] },
         };
@@ -348,34 +377,64 @@ export default function MapView({ neighborhoods, result, mode, focusedWarehouse 
     } else if (result?.baseline_warehouse) {
       addMarker(
         result.baseline_warehouse.lat, result.baseline_warehouse.lon,
-        'Baseline depot', null, '#7d7d8d', true, false, false,
+        'Baseline depot', null, NEUTRAL.baseline, true, false, false,
       );
     }
 
     // --- fit bounds, but only when the dataset itself changes ---
     //
-    // The panels FLOAT over the map, so the canvas is wider than the part of it
-    // the user can actually see. Fitting to the full canvas pushes points
-    // underneath the panels — invisible, and worse, silently: the default
-    // sample happens to sit mid-canvas so it looks correct. Pad by the real
-    // occluded widths instead. Below 1240px the panels stack (see globals.css),
-    // so the whole canvas is visible and the padding goes back to symmetric.
+    // The panels DOCK beside the map, so the whole canvas is visible and the
+    // only things that can cover a data point are the two small overlays:
+    // the stats strip top-left (~30px) and the legend bottom-left (~130px on
+    // the "after" view). Pad for those, plus room for marker labels, which
+    // hang ~110px to the right of their point.
+    //
+    // If a future layout floats panels over the map again, this padding must
+    // grow to the occluded widths — and be verified with the occlusion check,
+    // not by eye: the default sample sits mid-canvas and hides the bug.
     const key = neighborhoods.map((n) => `${n.lat},${n.lon}`).join('|');
     if (key && key !== fitted.current) {
       fitted.current = key;
       const b = new LngLatBounds();
       neighborhoods.forEach((n) => b.extend([n.lon, n.lat]));
-      const floating = typeof window !== 'undefined' && window.innerWidth > 1240;
-      // left panel 300 + gutter, right panel 360 + gutter, header 46 + gutter,
-      // then a little breathing room so markers are not flush against a panel.
-      const padding = floating
-        ? { left: 340, right: 400, top: 110, bottom: 70 }
-        : 60;
-      // A marker label is ~110px wide and hangs off its point, so cap the zoom
-      // low enough that two nearby depots do not overlap into mush.
+      const padding = { top: 64, right: 130, bottom: 150, left: 64 };
       if (!b.isEmpty()) m.fitBounds(b, { padding, duration: 700, maxZoom: 13 });
     }
-  }, [neighborhoods, result, mode, ready, focusedWarehouse]);
+  }, [neighborhoods, result, mode, ready, focusedWarehouse, theme]);
+
+  // ---- repaint the basemap when the theme changes ----
+  // Data layers are redrawn by the effect above (theme is in its deps); the
+  // grafted basemap layers are not React-owned, so they are repainted here.
+  useEffect(() => {
+    const m = map.current;
+    if (!m || !ready) return;
+    const P = BASEMAP_PAINT[theme];
+    try {
+      if (m.getLayer('bg')) m.setPaintProperty('bg', 'background-color', MAP_NEUTRAL[theme].bg);
+      for (const id of grafted.current) {
+        const layer = m.getLayer(id);
+        if (!layer) continue;
+        if (layer.type === 'fill')   m.setPaintProperty(id, 'fill-opacity', P.fill);
+        if (layer.type === 'line')   m.setPaintProperty(id, 'line-opacity', P.line);
+        if (layer.type === 'symbol') {
+          m.setPaintProperty(id, 'text-opacity', P.text);
+          m.setPaintProperty(id, 'icon-opacity', P.icon);
+        }
+        if (layer.type === 'raster') {
+          m.setPaintProperty(id, 'raster-opacity', P.raster);
+          // brightness-max suits the dark plane, brightness-min the light one;
+          // clear the other so a toggle does not leave both applied.
+          if (theme === 'dark') {
+            m.setPaintProperty(id, 'raster-brightness-min', 0);
+            m.setPaintProperty(id, 'raster-brightness-max', 0.55);
+          } else {
+            m.setPaintProperty(id, 'raster-brightness-max', 1);
+            m.setPaintProperty(id, 'raster-brightness-min', 0.35);
+          }
+        }
+      }
+    } catch { /* style mid-reload: the next draw picks it up */ }
+  }, [theme, ready]);
 
   return (
     <div className="map-wrap">

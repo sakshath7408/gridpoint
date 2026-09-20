@@ -1,6 +1,7 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import dynamic from 'next/dynamic';
 
 import {
@@ -12,7 +13,8 @@ import {
   type KSweepPoint, type ProofReport,
 } from '@/lib/engine';
 import type { ColumnMapping, Constraints, Neighborhood, Result, Robustness } from '@/lib/types';
-import { SERIES, CHART } from '@/lib/palette';
+import { seriesFor, chartFor } from '@/lib/palette';
+import { useTheme } from '@/lib/theme';
 import { mapColumns, loadModel, onStatus, MODEL_ID, type MapperStatus } from '@/lib/ai/columnMapper';
 
 const MapView = dynamic(() => import('@/components/MapView'), { ssr: false });
@@ -37,9 +39,237 @@ const STEPS: [string, string][] = [
   ['Compare and prove', 'Against one central depot, against k-means, and against exhaustive search.'],
 ];
 
+/* --------------------------------- icons --------------------------------- */
+/* One family: 16px grid, 1.5px stroke, round caps. currentColor throughout. */
+
+const svg = (d: React.ReactNode, size = 16) => (
+  <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor"
+       strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{d}</svg>
+);
+const Icon = {
+  info: svg(<><circle cx="8" cy="8" r="6.25" /><path d="M8 7.2v4" /><circle cx="8" cy="5" r=".55" fill="currentColor" stroke="none" /></>, 14),
+  copy: svg(<><rect x="5.5" y="5.5" width="8" height="8" rx="1.8" /><path d="M10.5 5.5v-2a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2" /></>, 14),
+  link: svg(<><path d="M6.5 9.5 9.5 6.5" /><path d="M7 4.5 8.2 3.3a2.6 2.6 0 0 1 3.7 3.7L10.7 8.2" /><path d="M9 11.5 7.8 12.7a2.6 2.6 0 0 1-3.7-3.7L5.3 7.8" /></>, 14),
+  download: svg(<><path d="M8 2.5v8" /><path d="m5 7.5 3 3 3-3" /><path d="M3 13.5h10" /></>, 14),
+  check: svg(<path d="m3.5 8.5 3 3 6-7" />, 14),
+  tick: svg(<path d="m3.5 8.5 3 3 6-7" strokeWidth="2.2" />, 9),
+  chevron: svg(<path d="M6 3.5 10.5 8 6 12.5" />, 10),
+  data: svg(<><rect x="2.5" y="3" width="11" height="10" rx="1.6" /><path d="M2.5 6.5h11M6.5 6.5v6.5" /></>),
+  layers: svg(<><path d="m8 2.5 5.5 3L8 8.5l-5.5-3z" /><path d="m2.5 8.5 5.5 3 5.5-3" /><path d="m2.5 11 5.5 3 5.5-3" /></>),
+  fleet: svg(<><path d="M2.5 4.5h7v6h-7z" /><path d="M9.5 6.5h2.6l1.4 2v2H9.5" /><circle cx="5" cy="12" r="1.3" /><circle cx="11.5" cy="12" r="1.3" /></>),
+  sliders: svg(<><path d="M2.5 5h11M2.5 11h11" /><circle cx="6" cy="5" r="1.6" fill="var(--surface)" /><circle cx="10.5" cy="11" r="1.6" fill="var(--surface)" /></>),
+  trend: svg(<><path d="M2.5 12.5 6.5 8l2.5 2.5L13.5 5" /><path d="M10.5 5h3v3" /></>),
+  sparkle: svg(<><path d="M8 2.5 9.3 6.7 13.5 8 9.3 9.3 8 13.5 6.7 9.3 2.5 8l4.2-1.3z" /></>),
+  upload: svg(<><path d="M8 10.5V3.5" /><path d="m5 6.5 3-3 3 3" /><path d="M3 11.5v1a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1v-1" /></>),
+  eye: svg(<><path d="M1.5 8s2.5-4.5 6.5-4.5S14.5 8 14.5 8s-2.5 4.5-6.5 4.5S1.5 8 1.5 8z" /><circle cx="8" cy="8" r="2" /></>),
+  shield: svg(<><path d="M8 2 13 4v4c0 3-2.2 5-5 6-2.8-1-5-3-5-6V4z" /><path d="m5.8 8 1.5 1.5L10.3 6.5" /></>),
+  scale: svg(<><path d="M8 2.5v11M3 13.5h10" /><path d="M3.5 5.5h9" /><path d="m3.5 5.5-2 4.5h4zM12.5 5.5l-2 4.5h4z" /></>),
+  leaf: svg(<><path d="M13 3c-6 0-9.5 3-9.5 8 0 1 .2 1.7.5 2.5C6.5 10 9 8.5 13 3z" /><path d="M4 13.5c1.5-3 4-5.5 7-7.5" /></>),
+  pin: svg(<><path d="M8 1.5 14 5v6l-6 3.5L2 11V5l6-3.5Z" /><circle cx="8" cy="8" r="2" fill="currentColor" stroke="none" /></>, 12),
+  sun: svg(<><circle cx="8" cy="8" r="3.1" /><path d="M8 1.6v1.5M8 12.9v1.5M14.4 8h-1.5M3.1 8H1.6M12.5 3.5l-1.1 1.1M4.6 11.4l-1.1 1.1M12.5 12.5l-1.1-1.1M4.6 4.6 3.5 3.5" /></>, 15),
+  moon: svg(<path d="M13.2 9.6A5.6 5.6 0 0 1 6.4 2.8a5.8 5.8 0 1 0 6.8 6.8z" />, 15),
+};
+
+/* --------------------------------- hints --------------------------------- */
+/* What a judge needs in one sentence, and the reason it matters in one more. */
+
+interface HintText { title: string; body: React.ReactNode; more?: React.ReactNode; icon?: React.ReactNode }
+
+const HINTS: Record<string, HintText> = {
+  data: {
+    title: 'What counts as a neighborhood',
+    icon: Icon.data,
+    body: <>Any place with customers: a locality, a pincode, a ward. Each needs an <code>id</code>, a <code>lat</code>/<code>lon</code>, and how many <code>orders</code> it generates per day.</>,
+    more: 'Orders are the weights. A busy area pulls a warehouse toward it in proportion to its volume — not more, not less.',
+  },
+  ai: {
+    title: 'How the columns were read',
+    icon: Icon.sparkle,
+    body: <>A sentence-transformer running <b>inside this browser</b> embeds each header and matches it to our schema by meaning. “Parcels Per Day” lands on <code>orders</code> without anyone writing that rule.</>,
+    more: 'The percentage is raw cosine similarity, shown as-is. What matters is the margin over the runner-up, not the absolute value.',
+  },
+  k: {
+    title: 'How many warehouses',
+    icon: Icon.layers,
+    body: 'K is the number of warehouses to place. Each one shortens trips but adds rent, so the total cost bottoms out somewhere in the middle.',
+    more: 'After a run the tool tells you where that minimum is. You don’t have to guess K — you can jump straight to it.',
+  },
+  fleet: {
+    title: 'Fleet, fuel, wages and rent',
+    icon: Icon.fleet,
+    body: 'These turn kilometres into rupees. Vehicle capacity sets trips per area; speed and congestion set driver hours; fuel and upkeep set the cost per kilometre.',
+    more: <>Every one of these folds into the area weights, so the optimiser handles them <b>for free</b> — the problem stays weighted k-medians.</>,
+  },
+  constraints: {
+    title: 'Hard limits on the network',
+    icon: Icon.sliders,
+    body: 'Capacity caps the orders a single warehouse may serve. Service radius caps how far any area may be from its depot.',
+    more: 'Violations are flagged on the map and in the results, never silently absorbed. You see exactly which area breaks which rule.',
+  },
+  scenario: {
+    title: 'What if demand changes?',
+    icon: Icon.trend,
+    body: 'Reshape today’s order volumes — growth, sprawl to the edges, infill at the core — and re-run to see whether the answer moves.',
+    more: 'A siting that survives several futures is worth more than one tuned to today.',
+  },
+  saving: {
+    title: 'Against one central depot',
+    icon: Icon.scale,
+    body: 'The baseline is the single best-placed warehouse for this demand — not a bad strawman, the honest one-depot optimum. The saving is what a network of K does better.',
+    more: 'Rupees per day, trunk leg plus facility rent. Delivery inside an area is excluded because it barely changes with depot position.',
+  },
+  kmeans: {
+    title: 'Why not just use k-means?',
+    icon: Icon.scale,
+    body: 'k-means minimises squared distance. Delivery cost is linear in distance. Squaring lets one far, busy area drag a depot toward it harder than its real cost justifies.',
+    more: 'We compute both networks and show the gap. Same K, same data — the familiar algorithm simply loses money.',
+  },
+  co2: {
+    title: 'How CO₂ is estimated',
+    icon: Icon.leaf,
+    body: 'Vehicle-kilometres avoided per day × the fleet’s emission factor × 365. Two-wheelers use 46 g/km; light trucks 402 g/km.',
+    more: 'Road distance is straight-line × 1.32 to account for the street grid. Stated so it can be checked, not hidden in the number.',
+  },
+  tradeoff: {
+    title: 'The trade-off curve',
+    icon: Icon.trend,
+    body: 'Delivery cost falls as warehouses are added; rent rises linearly. Their sum has a genuine interior minimum — that is the right number of warehouses.',
+    more: 'Click any bar to switch to that K. The starred bar is the optimum.',
+  },
+  proof: {
+    title: 'What is actually proven',
+    icon: Icon.shield,
+    body: <><b>K = 1</b> is provably the global optimum: the objective is convex and Weiszfeld’s method descends it. That is a theorem. <b>K &gt; 1</b> is NP-hard, so we certify instead.</>,
+    more: 'Certified means: never worse than an exhaustive search over every way of siting K depots on the demand points, and locally optimal across hundreds of perturbations.',
+  },
+  robust: {
+    title: 'Regret under uncertainty',
+    icon: Icon.shield,
+    body: 'Demand is resampled 16 times at ±30%. We compare keeping today’s warehouses against re-siting with perfect hindsight. The gap is regret.',
+    more: 'If regret is below what a relocation would cost, the correct decision is to build and not move.',
+  },
+  beforeAfter: {
+    title: 'Before and after',
+    icon: Icon.eye,
+    body: 'Before shows every area served from the single best-placed depot. After shows the optimised network with each area assigned to its cheapest warehouse.',
+  },
+  costs: {
+    title: 'Where the rupees go',
+    icon: Icon.data,
+    body: 'Fuel and upkeep scale with vehicle-kilometres. Driver time is hours on the road at the fleet’s effective speed. Facilities are a flat daily cost per warehouse.',
+  },
+};
+
+function Hint({ id: key, side }: { id: keyof typeof HINTS; side?: 'below' | 'above' }) {
+  const h = HINTS[key];
+  const uid = useId();
+  const btn = useRef<HTMLButtonElement>(null);
+  const [open, setOpen] = useState(false);
+  // Positioned in viewport space (position: fixed) so the card can escape the
+  // scrolling panel. Computed on open, never during render — this component
+  // is prerendered on the server where `window` does not exist.
+  const [pos, setPos] = useState<{ left: number; top: number; bottom: number; cx: number; placed: 'below' | 'above' }>(
+    { left: 0, top: 0, bottom: 0, cx: 50, placed: 'below' },
+  );
+
+  const place = useCallback(() => {
+    const r = btn.current?.getBoundingClientRect();
+    if (!r) return;
+    const W = 264, margin = 12, gap = 10;
+    let left = r.left + r.width / 2 - W / 2;
+    left = Math.max(margin, Math.min(left, window.innerWidth - W - margin));
+    const cx = ((r.left + r.width / 2 - left) / W) * 100;
+    const wantAbove = side === 'above' || (side !== 'below' && r.bottom + 190 > window.innerHeight);
+    setPos({
+      left, cx,
+      top: r.bottom + gap,
+      bottom: window.innerHeight - (r.top - gap),
+      placed: wantAbove ? 'above' : 'below',
+    });
+  }, [side]);
+
+  const show = () => { place(); setOpen(true); };
+  const hide = () => setOpen(false);
+
+  // The card is portalled to <body>. An ancestor with a (filling) transform
+  // animation becomes the containing block for position:fixed in Chromium,
+  // which put cards inside the animated results column ~1000px off-screen.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') hide(); };
+    const onScroll = () => place();
+    window.addEventListener('keydown', onKey);
+    window.addEventListener('scroll', onScroll, true);
+    window.addEventListener('resize', onScroll);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('scroll', onScroll, true);
+      window.removeEventListener('resize', onScroll);
+    };
+  }, [open, place]);
+
+  return (
+    <span className="hint">
+      <button ref={btn} type="button" className="hint-btn" aria-label={`About: ${h.title}`}
+              aria-describedby={uid} aria-expanded={open}
+              onMouseEnter={show} onMouseLeave={hide} onFocus={show} onBlur={hide}
+              onClick={(e) => { e.preventDefault(); open ? hide() : show(); }}>
+        {Icon.info}
+      </button>
+      {mounted && createPortal(
+        <span id={uid} role="tooltip" className="hint-pop" data-open={open} data-side={pos.placed}
+              style={{
+                left: pos.left,
+                top: pos.placed === 'below' ? pos.top : undefined,
+                bottom: pos.placed === 'above' ? pos.bottom : undefined,
+                ['--cx' as string]: `${pos.cx}%`,
+              }}>
+          <span className="hint-t">{h.icon && <span className="ic">{h.icon}</span>}{h.title}</span>
+          <span className="hint-b" style={{ display: 'block' }}>{h.body}</span>
+          {h.more && <span className="hint-m" style={{ display: 'block' }}>{h.more}</span>}
+        </span>,
+        document.body,
+      )}
+    </span>
+  );
+}
+
+/* Small labelled tooltip for icon buttons — same card, no “more” line. */
+function Tip({ text, children }: { text: string; children: React.ReactNode }) {
+  const uid = useId();
+  const [open, setOpen] = useState(false);
+  const wrap = useRef<HTMLSpanElement>(null);
+  const [pos, setPos] = useState({ left: 0, top: 0, cx: 50 });
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  const show = () => {
+    const r = wrap.current?.getBoundingClientRect(); if (!r) return;
+    const W = 180, margin = 12;
+    let left = r.left + r.width / 2 - W / 2;
+    left = Math.max(margin, Math.min(left, window.innerWidth - W - margin));
+    setPos({ left, top: r.bottom + 8, cx: ((r.left + r.width / 2 - left) / W) * 100 });
+    setOpen(true);
+  };
+  return (
+    <span ref={wrap} className="hint" onMouseEnter={show} onMouseLeave={() => setOpen(false)}
+          onFocus={show} onBlur={() => setOpen(false)} aria-describedby={uid}>
+      {children}
+      {mounted && createPortal(
+        <span id={uid} role="tooltip" className="hint-pop" data-open={open} data-side="below"
+              style={{ left: pos.left, top: pos.top, width: 180, padding: '7px 10px', ['--cx' as string]: `${pos.cx}%` }}>
+          <span className="hint-b" style={{ display: 'block', marginTop: 0, color: 'var(--ink)' }}>{text}</span>
+        </span>,
+        document.body,
+      )}
+    </span>
+  );
+}
+
 /* ----------------------------- small pieces ----------------------------- */
 
-/** Eases a number towards its target so the headline never just "appears". */
 function useCountUp(target: number, ms = 900) {
   const [v, setV] = useState(0);
   const from = useRef(0);
@@ -62,64 +292,36 @@ function useCountUp(target: number, ms = 900) {
   return v;
 }
 
-function Fold({ title, tag, children }: { title: string; tag?: string; children: React.ReactNode }) {
+function Fold({ title, tag, icon, hint, children }: {
+  title: string; tag?: string; icon?: React.ReactNode; hint?: keyof typeof HINTS; children: React.ReactNode;
+}) {
   return (
     <details className="fold">
       <summary>
-        <span className="chev">
-          <svg width="8" height="8" viewBox="0 0 10 10" fill="none">
-            <path d="M3.5 2 7 5l-3.5 3" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-        </span>
+        {icon && <span className="ic">{icon}</span>}
         {title}
+        {hint && <Hint id={hint} />}
         {tag && <span className="tag">{tag}</span>}
+        <span className="chev">{Icon.chevron}</span>
       </summary>
       <div className="fold-body">{children}</div>
     </details>
   );
 }
 
-function Slider({ label, value, min, max, step = 1, onChange, display }: {
+function Slider({ label, value, min, max, step = 1, onChange, display, hint }: {
   label: string; value: number; min: number; max: number; step?: number;
-  onChange: (v: number) => void; display: string;
+  onChange: (v: number) => void; display: string; hint?: keyof typeof HINTS;
 }) {
   return (
     <div className="field">
-      <div className="label"><span>{label}</span><b className="num">{display}</b></div>
-      <input type="range" min={min} max={max} step={step} value={value}
+      <div className="label"><span>{label}{hint && <Hint id={hint} />}</span><b className="num">{display}</b></div>
+      <input type="range" min={min} max={max} step={step} value={value} aria-label={label}
              onChange={(e) => onChange(+e.target.value)}
              style={{ ['--pct' as string]: `${((value - min) / (max - min)) * 100}%` }} />
     </div>
   );
 }
-
-const Icon = {
-  copy: (
-    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="5.5" y="5.5" width="8" height="8" rx="1.8" /><path d="M10.5 5.5v-2a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2" />
-    </svg>
-  ),
-  link: (
-    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M6.5 9.5 9.5 6.5" /><path d="M7 4.5 8.2 3.3a2.6 2.6 0 0 1 3.7 3.7L10.7 8.2" /><path d="M9 11.5 7.8 12.7a2.6 2.6 0 0 1-3.7-3.7L5.3 7.8" />
-    </svg>
-  ),
-  download: (
-    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M8 2.5v8" /><path d="m5 7.5 3 3 3-3" /><path d="M3 13.5h10" />
-    </svg>
-  ),
-  check: (
-    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-      <path d="m3.5 8.5 3 3 6-7" />
-    </svg>
-  ),
-  tick: (
-    <svg width="9" height="9" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="m3.5 8.5 3 3 6-7" />
-    </svg>
-  ),
-};
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 const frame = () => new Promise<void>((r) => requestAnimationFrame(() => r()));
@@ -127,6 +329,10 @@ const frame = () => new Promise<void>((r) => requestAnimationFrame(() => r()));
 /* --------------------------------- page --------------------------------- */
 
 export default function Page() {
+  const [theme, , toggleTheme] = useTheme();
+  const SERIES = seriesFor(theme);
+  const CHART = chartFor(theme);
+
   const [source, setSource] = useState<Source>('sample');
   const [sampleName, setSampleName] = useState(DEFAULT_SAMPLE);
   const [uploaded, setUploaded] = useState<Neighborhood[] | null>(null);
@@ -147,7 +353,7 @@ export default function Page() {
 
   const [hasRun, setHasRun] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [stage, setStage] = useState(0);            // 0 idle · 1..4 solving step
+  const [stage, setStage] = useState(0);
   const [result, setResult] = useState<Result | null>(null);
   const [sweep, setSweep] = useState<{ points: KSweepPoint[]; optimalK: number } | null>(null);
   const [proof, setProof] = useState<ProofReport | null>(null);
@@ -190,7 +396,7 @@ export default function Page() {
 
   useEffect(() => { if (k > maxK) setK(maxK); }, [maxK, k]);
 
-  /* ---- permalink: the whole scenario lives in the URL hash ---- */
+  /* ---- permalink ---- */
   useEffect(() => {
     try {
       const h = new URLSearchParams(window.location.hash.replace(/^#/, ''));
@@ -205,7 +411,7 @@ export default function Page() {
       const rad = Number(h.get('rad')); if (rad >= 2 && rad <= 40) { setUseRadius(true); setMaxRadius(rad); }
       const sc = h.get('sc'); if (sc && DEMAND_SCENARIOS.some((x) => x.id === sc)) setScenarioId(sc);
       if (h.get('run') === '1') setAutoRun(true);
-    } catch { /* malformed hash: ignore */ }
+    } catch { /* ignore malformed hash */ }
     setHydrated(true);
   }, []);
 
@@ -237,8 +443,6 @@ export default function Page() {
     setRobust(stressTest(neighborhoods, r.warehouses, constraints, 16));
   }, [neighborhoods, k, constraints, validation.ok, maxK]);
 
-  // First run walks the four steps visibly. Each step is the real computation
-  // for that stage; we only hold each one on screen long enough to be read.
   const handleRun = useCallback(async () => {
     if (!validation.ok || busy) return;
     if (hasRun) { compute(); return; }
@@ -268,7 +472,6 @@ export default function Page() {
     if (autoRun && hydrated && validation.ok && !hasRun && !busy) { setAutoRun(false); void handleRun(); }
   }, [autoRun, hydrated, validation.ok, hasRun, busy, handleRun]);
 
-  // ⌘/Ctrl + Enter runs it from anywhere on the page.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); void handleRun(); }
@@ -297,11 +500,18 @@ export default function Page() {
     window.setTimeout(() => setToast(null), 1800);
     window.setTimeout(() => setDone(null), 1400);
   };
-
   const copyText = async (text: string, msg: string, key: string) => {
     try { await navigator.clipboard.writeText(text); flash(msg, key); }
     catch { flash('Could not access the clipboard', key); }
   };
+
+  const optimalK = sweep?.optimalK ?? null;
+  const bd = result?.breakdown;
+  const showAfter = hasRun && mapMode === 'after' && !!result;
+  const saving = sweep && result
+    ? ((sweep.points[0].total - result.total_cost) / sweep.points[0].total) * 100 : 0;
+  const savingShown = useCountUp(hasRun ? saving : 0);
+  const showResults = hasRun && !!result && !!bd;
 
   const summaryText = () => {
     if (!result || !sweep || !bd) return '';
@@ -332,46 +542,34 @@ export default function Page() {
     flash('Network exported as CSV', 'csv');
   };
 
-  /* ---- derived ---- */
-  const optimalK = sweep?.optimalK ?? null;
-  const bd = result?.breakdown;
-  const showAfter = hasRun && mapMode === 'after' && !!result;
-  const saving = sweep && result
-    ? ((sweep.points[0].total - result.total_cost) / sweep.points[0].total) * 100 : 0;
-  const savingShown = useCountUp(hasRun ? saving : 0);
-  const showResults = hasRun && !!result && !!bd;
-
   const stepState = (i: number): 'idle' | 'active' | 'done' =>
     stage === 0 ? 'idle' : i + 1 < stage ? 'done' : i + 1 === stage ? 'active' : 'idle';
 
   return (
     <div className="app">
-      {/* the map is the page */}
-      <div className="map-host">
-        <MapView neighborhoods={neighborhoods} result={result}
-                 mode={showAfter ? 'after' : 'before'} focusedWarehouse={focused} />
-      </div>
-
-      <header className="head glass">
+      <header className="head">
         <div className="brand">
-          <span className="logo-mark">
-            <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
-              <path d="M8 1.5 14 5v6l-6 3.5L2 11V5l6-3.5Z" stroke="#fff" strokeWidth="1.5" strokeLinejoin="round" />
-              <circle cx="8" cy="8" r="2" fill="#fff" />
-            </svg>
-          </span>
+          <span className="logo-mark">{Icon.pin}</span>
           <span className="logo">GridPoint</span>
           <span className="logo-sub">Where should the warehouse go?</span>
         </div>
         <div className="head-spacer" />
+        <Tip text={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}>
+          <button className="theme-btn" onClick={toggleTheme}
+                  aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+                  aria-pressed={theme === 'light'}>
+            {theme === 'dark' ? Icon.sun : Icon.moon}
+          </button>
+        </Tip>
         {hasRun && result && (
-          <div className="seg" style={{ width: 140 }}>
-            <button aria-pressed={mapMode === 'before'} onClick={() => setMapMode('before')}>Before</button>
-            <button aria-pressed={mapMode === 'after'} onClick={() => setMapMode('after')}>After</button>
-          </div>
+          <>
+            <Hint id="beforeAfter" />
+            <div className="seg" style={{ width: 150 }}>
+              <button aria-pressed={mapMode === 'before'} onClick={() => setMapMode('before')}>Before</button>
+              <button aria-pressed={mapMode === 'after'} onClick={() => setMapMode('after')}>After</button>
+            </div>
+          </>
         )}
-        {/* aria-label, not title alone: a bare title becomes the accessible
-            name, so screen readers announced this button as "⌘ Enter". */}
         <button className="btn primary" onClick={() => void handleRun()} disabled={!validation.ok || busy}
                 aria-label={busy ? 'Solving' : hasRun ? 'Re-run the optimisation' : 'Optimise'}
                 aria-keyshortcuts="Meta+Enter Control+Enter"
@@ -382,21 +580,21 @@ export default function Page() {
       </header>
 
       {/* ------------------------------ left ------------------------------ */}
-      <aside className="panel left glass">
+      <aside className="panel left">
         <div className="panel-scroll">
           <section className="block">
             <div className="eyebrow"><span className="idx">01</span>Input</div>
-            <div className="h">Neighborhood data</div>
+            <div className="h">Neighborhood data<Hint id="data" /></div>
             <p className="why">Where customers are, and how much they order.</p>
 
-            <div className="seg" style={{ marginBottom: 10 }}>
+            <div className="seg" style={{ marginBottom: 10 }} role="group" aria-label="Data source">
               <button aria-pressed={source === 'sample'} onClick={() => { setSource('sample'); resetRun(); }}>Sample</button>
               <button aria-pressed={source === 'upload'} onClick={() => setSource('upload')}>Upload</button>
               <button aria-pressed={source === 'manual'} onClick={() => { setSource('manual'); resetRun(); }}>Type</button>
             </div>
 
             {source === 'sample' && (
-              <select value={sampleName} onChange={(e) => { setSampleName(e.target.value); resetRun(); }}>
+              <select value={sampleName} aria-label="Sample dataset" onChange={(e) => { setSampleName(e.target.value); resetRun(); }}>
                 {Object.keys(SAMPLES).map((n) => <option key={n} value={n}>{n}</option>)}
               </select>
             )}
@@ -406,7 +604,7 @@ export default function Page() {
                 <input ref={fileRef} type="file" accept=".csv,text/csv" style={{ display: 'none' }}
                        onChange={(e) => { const f = e.target.files?.[0]; if (f) f.text().then((t) => ingestCsv(t, f.name)); }} />
                 <button className="btn wide" onClick={() => fileRef.current?.click()} disabled={aiBusy}>
-                  {aiBusy ? <><span className="spin" /> Reading</> : 'Choose a CSV'}
+                  {aiBusy ? <><span className="spin dark" /> Reading</> : <>{Icon.upload} Choose a CSV</>}
                 </button>
                 <button className="btn ghost sm" onClick={() => ingestCsv(MESSY_DEMO_CSV, 'unfamiliar_headers.csv')} disabled={aiBusy}>
                   Try one with unfamiliar headers →
@@ -415,8 +613,11 @@ export default function Page() {
                   <div style={{ marginTop: 6 }}>
                     <div className="label">
                       <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{uploadInfo.fileName}</span>
-                      <span className={`pill ${uploadInfo.usedModel ? 'accent' : 'warn'}`}>
-                        <span className="dot" />{uploadInfo.usedModel ? 'AI mapped' : 'alias table'}
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                        <span className={`pill ${uploadInfo.usedModel ? 'accent' : 'warn'}`}>
+                          {uploadInfo.usedModel ? Icon.sparkle : <span className="dot" />}{uploadInfo.usedModel ? 'AI mapped' : 'alias table'}
+                        </span>
+                        <Hint id="ai" />
                       </span>
                     </div>
                     {uploadInfo.mapping.map((m) => (
@@ -424,8 +625,8 @@ export default function Page() {
                         <dt style={{ maxWidth: 130, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.sourceColumn}</dt>
                         <dd style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                           <span className="faint">→</span>
-                          <code className="mono" style={{ color: 'var(--accent-3)', fontSize: 11.5 }}>{m.field}</code>
-                          {m.method === 'semantic' && <span className="num faint" style={{ fontSize: 10 }}>{(m.confidence * 100).toFixed(0)}%</span>}
+                          <code className="mono" style={{ fontSize: 11.5 }}>{m.field}</code>
+                          {m.method === 'semantic' && <span className="num dim" style={{ fontSize: 10.5 }}>{(m.confidence * 100).toFixed(0)}%</span>}
                         </dd>
                       </div>
                     ))}
@@ -441,8 +642,8 @@ export default function Page() {
 
             {source === 'manual' && (
               <>
-                <div className="label"><span>One row per area</span><span className="mono faint" style={{ fontSize: 10.5 }}>id, lat, lon, orders</span></div>
-                <textarea value={manualText} spellCheck={false} rows={7}
+                <div className="label"><span>One row per area</span><span className="mono dim" style={{ fontSize: 10.5 }}>id, lat, lon, orders</span></div>
+                <textarea value={manualText} spellCheck={false} rows={7} aria-label="Neighborhood CSV"
                           onChange={(e) => { setManualText(e.target.value); resetRun(); }}
                           style={{ fontFamily: 'var(--mono)', fontSize: 11, lineHeight: 1.6, resize: 'vertical' }} />
                 {manualReport && manualReport.errors.length > 0 && (
@@ -467,28 +668,28 @@ export default function Page() {
 
           <section className="block">
             <div className="eyebrow"><span className="idx">02</span>Decision</div>
-            <div className="h">How many warehouses</div>
+            <div className="h">How many warehouses<Hint id="k" /></div>
             <p className="why">More warehouses, shorter trips, more rent. One number balances it.</p>
             <Slider label="Warehouses (K)" value={k} min={1} max={maxK} onChange={setK} display={String(k)} />
             {optimalK !== null && (
               k === optimalK
-                ? <p className="note"><span style={{ color: 'var(--accent-3)' }}>K={optimalK}</span> is the cost optimum for this network.</p>
-                : <button className="btn wide sm tint" onClick={() => setK(optimalK)}>
+                ? <p className="note"><b style={{ color: 'var(--ink)' }}>K={optimalK}</b> is the cost optimum for this network.</p>
+                : <button className="btn wide sm soft" onClick={() => setK(optimalK)}>
                     Use the optimum · K={optimalK}
                   </button>
             )}
           </section>
 
-          <Fold title="Fleet & costs" tag={`${vehicle.label} · ${traffic.label}`}>
+          <Fold title="Fleet & costs" icon={Icon.fleet} hint="fleet" tag={`${vehicle.label} · ${traffic.label}`}>
             <div className="field">
               <div className="label"><span>Vehicle</span></div>
-              <select value={vehicleId} onChange={(e) => setVehicleId(e.target.value)}>
+              <select value={vehicleId} aria-label="Vehicle" onChange={(e) => setVehicleId(e.target.value)}>
                 {VEHICLES.map((v) => <option key={v.id} value={v.id}>{v.label} — {v.capacity} orders/trip</option>)}
               </select>
             </div>
             <div className="field">
               <div className="label"><span>Traffic</span></div>
-              <select value={trafficId} onChange={(e) => setTrafficId(e.target.value)}>
+              <select value={trafficId} aria-label="Traffic" onChange={(e) => setTrafficId(e.target.value)}>
                 {TRAFFIC.map((t) => <option key={t.id} value={t.id}>{t.label} — {t.description}</option>)}
               </select>
             </div>
@@ -497,51 +698,92 @@ export default function Page() {
             <Slider label="Facility rent" value={whCost} min={500} max={15000} step={250} onChange={setWhCost} display={`${inr(whCost)}/day`} />
           </Fold>
 
-          <Fold title="Constraints" tag={[useCapacity && 'capacity', useRadius && 'radius'].filter(Boolean).join(' · ') || 'none'}>
+          <Fold title="Constraints" icon={Icon.sliders} hint="constraints" tag={[useCapacity && 'capacity', useRadius && 'radius'].filter(Boolean).join(' · ') || 'none'}>
             <label className="check" style={{ marginBottom: useCapacity ? 10 : 12 }}>
               <input type="checkbox" checked={useCapacity} onChange={(e) => setUseCapacity(e.target.checked)} />
-              Cap orders per warehouse
+              <span className="grow">Cap orders per warehouse</span>
             </label>
             {useCapacity && <Slider label="Capacity" value={capacity} min={200} max={4000} step={50} onChange={setCapacity} display={`${num(capacity)}/day`} />}
             <label className="check" style={{ marginBottom: useRadius ? 10 : 0 }}>
               <input type="checkbox" checked={useRadius} onChange={(e) => setUseRadius(e.target.checked)} />
-              Maximum service radius
+              <span className="grow">Maximum service radius</span>
             </label>
             {useRadius && <Slider label="Radius" value={maxRadius} min={2} max={40} onChange={setMaxRadius} display={`${maxRadius} km`} />}
           </Fold>
 
-          <Fold title="Demand scenario" tag={scenario.label}>
-            <select value={scenarioId} onChange={(e) => setScenarioId(e.target.value)}>
+          <Fold title="Demand scenario" icon={Icon.trend} hint="scenario" tag={scenario.label}>
+            <select value={scenarioId} aria-label="Demand scenario" onChange={(e) => setScenarioId(e.target.value)}>
               {DEMAND_SCENARIOS.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
             </select>
             <p className="note" style={{ marginTop: 8 }}>{scenario.description}</p>
           </Fold>
 
-          <Fold title="AI component" tag={ai.state === 'ready' ? 'loaded' : ai.state === 'loading' ? `${ai.progress}%` : ai.state === 'unavailable' ? 'offline' : 'on demand'}>
+          <Fold title="AI component" icon={Icon.sparkle} hint="ai" tag={ai.state === 'ready' ? 'loaded' : ai.state === 'loading' ? `${ai.progress}%` : ai.state === 'unavailable' ? 'offline' : 'on demand'}>
             <p className="why" style={{ marginTop: 0 }}>
               A sentence-transformer runs <em>in this browser</em> to read spreadsheet
               headers by meaning. No API key, no server.
             </p>
-            <div className="kv"><dt>Model</dt><dd style={{ fontSize: 11.5 }}>MiniLM-L6-v2</dd></div>
-            <div className="kv"><dt>Runtime</dt><dd style={{ fontSize: 11.5 }}>WebAssembly, on-device</dd></div>
+            <div className="kv"><dt>Model</dt><dd style={{ fontSize: 12 }}>MiniLM-L6-v2</dd></div>
+            <div className="kv"><dt>Runtime</dt><dd style={{ fontSize: 12 }}>WebAssembly, on-device</dd></div>
             {ai.state === 'idle' && (
               <button className="btn wide sm" style={{ marginTop: 10 }} onClick={() => loadModel().catch(() => {})}>
                 Preload (~23 MB)
               </button>
             )}
-            <p className="note mono faint" style={{ marginTop: 9, fontSize: 10 }}>{MODEL_ID}</p>
+            <p className="note mono dim" style={{ marginTop: 9, fontSize: 10.5 }}>{MODEL_ID}</p>
           </Fold>
         </div>
         <footer className="panel-foot">
-          <span>Weighted k-medians · Weiszfeld · certified</span>
-          <a href="https://github.com/sakshath7408/gridpoint" target="_blank" rel="noreferrer">
-            Source ↗
-          </a>
+          <span>k-medians · Weiszfeld · certified</span>
+          <a href="https://github.com/sakshath7408/gridpoint" target="_blank" rel="noreferrer">Source ↗</a>
         </footer>
       </aside>
 
+      {/* ------------------------------ map ------------------------------ */}
+      <div className="map-host">
+        <MapView neighborhoods={neighborhoods} result={result}
+                 mode={showAfter ? 'after' : 'before'} focusedWarehouse={focused}
+                 theme={theme} />
+
+        <div className="map-badges">
+          <span className="badge"><b className="num">{neighborhoods.length}</b> areas</span>
+          <span className="badge"><b className="num">{num(totalOrders)}</b> orders/day</span>
+          {showAfter && <span className="badge"><b className="num">{result!.warehouses.length}</b> warehouses</span>}
+          {showAfter && !!result!.over_capacity?.length && (
+            <span className="badge warn">over capacity · <b>{result!.over_capacity.join(', ')}</b></span>
+          )}
+          {showAfter && !!result!.out_of_radius?.length && (
+            <span className="badge warn"><b className="num">{result!.out_of_radius.length}</b> beyond {maxRadius} km</span>
+          )}
+        </div>
+
+        <div className="map-legend">
+          <div className="legend-title">{showAfter ? 'Optimised network' : 'Demand today'}</div>
+          {showAfter ? (
+            <>
+              {result!.warehouses.map((w, i) => (
+                <div key={w.id} className="legend-row"
+                     style={{ cursor: 'pointer', opacity: focused && focused !== w.id ? 0.3 : 1 }}
+                     onMouseEnter={() => setFocused(w.id)} onMouseLeave={() => setFocused(null)}>
+                  <span className="legend-dot" style={{ background: SERIES[i % SERIES.length] }} />
+                  {w.id}
+                  <span className="num dim" style={{ marginLeft: 'auto', paddingLeft: 14 }}>{num(result!.load?.[w.id] ?? 0)}</span>
+                </div>
+              ))}
+              <div className="legend-row faint" style={{ fontSize: 10.5, marginTop: 3 }}>orders served per day</div>
+            </>
+          ) : (
+            <>
+              <div className="legend-row"><span className="legend-dot round" style={{ background: 'var(--ink-3)' }} />one area</div>
+              <div className="legend-row faint" style={{ fontSize: 10.5 }}>circle area = daily orders</div>
+              {hasRun && <div className="legend-row"><span className="legend-dot hollow" />naive depot</div>}
+            </>
+          )}
+        </div>
+      </div>
+
       {/* ------------------------------ right ------------------------------ */}
-      <aside className="panel right glass">
+      <aside className="panel right">
         <div className="panel-scroll">
           {!showResults ? (
             <section className="block">
@@ -566,14 +808,20 @@ export default function Page() {
             <>
               <div className="hero rise">
                 <div className="hero-top">
-                  <div className="eyebrow" style={{ whiteSpace: 'nowrap' }}>Cheaper than one central depot</div>
+                  <div className="eyebrow" style={{ whiteSpace: 'nowrap' }}>Cheaper than one central depot<Hint id="saving" /></div>
                   <div className="hero-actions">
-                    <button className="icon-btn" data-done={done === 'sum'} title="Copy a one-paragraph summary"
-                            onClick={() => copyText(summaryText(), 'Summary copied', 'sum')}>{done === 'sum' ? Icon.check : Icon.copy}</button>
-                    <button className="icon-btn" data-done={done === 'link'} title="Copy a link to this exact scenario"
-                            onClick={() => copyText(window.location.href, 'Link copied — opens on this result', 'link')}>{done === 'link' ? Icon.check : Icon.link}</button>
-                    <button className="icon-btn" data-done={done === 'csv'} title="Export warehouses and assignments as CSV"
-                            onClick={exportCsv}>{done === 'csv' ? Icon.check : Icon.download}</button>
+                    <Tip text="Copy a one-paragraph summary">
+                      <button className="icon-btn" data-done={done === 'sum'} aria-label="Copy summary"
+                              onClick={() => copyText(summaryText(), 'Summary copied', 'sum')}>{done === 'sum' ? Icon.check : Icon.copy}</button>
+                    </Tip>
+                    <Tip text="Copy a link to this exact scenario">
+                      <button className="icon-btn" data-done={done === 'link'} aria-label="Copy link"
+                              onClick={() => copyText(window.location.href, 'Link copied — opens on this result', 'link')}>{done === 'link' ? Icon.check : Icon.link}</button>
+                    </Tip>
+                    <Tip text="Export warehouses and assignments as CSV">
+                      <button className="icon-btn" data-done={done === 'csv'} aria-label="Export CSV"
+                              onClick={exportCsv}>{done === 'csv' ? Icon.check : Icon.download}</button>
+                    </Tip>
                   </div>
                 </div>
                 <div className="hero-value num">{savingShown.toFixed(1)}<span className="unit">%</span></div>
@@ -594,15 +842,15 @@ export default function Page() {
                 <div className="stat">
                   <div className="stat-l">Saved per year</div>
                   <div className="stat-v num">{result!.impact ? inrK(result!.impact.savedPerYear) : '—'}</div>
-                  <div className="stat-s">at today's demand</div>
+                  <div className="stat-s">at today’s demand</div>
                 </div>
                 <div className="stat">
-                  <div className="stat-l">CO₂ avoided</div>
+                  <div className="stat-l">CO₂ avoided<Hint id="co2" /></div>
                   <div className="stat-v num">{result!.impact ? `${result!.impact.co2TonnesSavedPerYear.toFixed(0)} t` : '—'}</div>
                   <div className="stat-s">per year</div>
                 </div>
                 <div className="stat">
-                  <div className="stat-l">vs k-means</div>
+                  <div className="stat-l">vs k-means<Hint id="kmeans" /></div>
                   <div className="stat-v num" style={{ color: 'var(--good)' }}>−{(result!.placement_gain_pct ?? 0).toFixed(1)}%</div>
                   <div className="stat-s">at equal K</div>
                 </div>
@@ -610,12 +858,13 @@ export default function Page() {
 
               {sweep && (
                 <section className="block rise-3">
-                  <div className="eyebrow">The trade-off</div>
+                  <div className="eyebrow">The trade-off<Hint id="tradeoff" /></div>
                   <p className="why" style={{ marginTop: 5 }}>
                     Each warehouse buys back delivery cost and adds rent. The total bottoms
-                    out at <b style={{ color: 'var(--accent-3)' }}>K={sweep.optimalK}</b>.
+                    out at <b style={{ color: 'var(--ink)' }}>K={sweep.optimalK}</b>.
                   </p>
-                  <KSweepChart points={sweep.points} optimalK={sweep.optimalK} currentK={Math.min(k, maxK)} onPick={setK} />
+                  <KSweepChart points={sweep.points} optimalK={sweep.optimalK}
+                               currentK={Math.min(k, maxK)} onPick={setK} theme={theme} />
                 </section>
               )}
 
@@ -629,7 +878,7 @@ export default function Page() {
                 {tab === 'costs' && (
                   <section className="block">
                     <dl>
-                      <div className="kv"><dt>Fuel &amp; upkeep</dt><dd className="num">{inr(bd!.fuel)}</dd></div>
+                      <div className="kv"><dt>Fuel &amp; upkeep<Hint id="costs" /></dt><dd className="num">{inr(bd!.fuel)}</dd></div>
                       <div className="kv"><dt>Driver time</dt><dd className="num">{inr(bd!.driver)}</dd></div>
                       <div className="kv"><dt>Facilities</dt><dd className="num">{inr(bd!.infrastructure)}</dd></div>
                       <div className="kv total"><dt>Total per day</dt><dd className="num">{inr(bd!.total)}</dd></div>
@@ -638,13 +887,16 @@ export default function Page() {
                       {result!.impact && <div className="kv"><dt>CO₂ per day</dt><dd className="num">{result!.impact.co2KgPerDay.toFixed(0)} kg</dd></div>}
                     </dl>
                     {robust && robust.trials > 0 && (
-                      <p className="note" style={{ marginTop: 12 }}>
-                        <strong style={{ color: 'var(--ink-2)' }}>Survives change.</strong> Across {robust.trials} runs
-                        with demand shifted ±{robust.swingPct}%, keeping these warehouses costs{' '}
-                        <strong className="num" style={{ color: robust.meanRegretPct < 3 ? 'var(--good)' : 'var(--warning)' }}>
-                          {robust.meanRegretPct.toFixed(1)}%
-                        </strong>{' '}
-                        more than re-optimising with hindsight.
+                      <p className="note" style={{ marginTop: 12, display: 'flex', gap: 4, alignItems: 'flex-start' }}>
+                        <span>
+                          <strong style={{ color: 'var(--ink-2)' }}>Survives change.</strong> Across {robust.trials} runs
+                          with demand shifted ±{robust.swingPct}%, keeping these warehouses costs{' '}
+                          <strong className="num" style={{ color: robust.meanRegretPct < 3 ? 'var(--good)' : 'var(--warning)' }}>
+                            {robust.meanRegretPct.toFixed(1)}%
+                          </strong>{' '}
+                          more than re-optimising with hindsight.
+                        </span>
+                        <Hint id="robust" side="above" />
                       </p>
                     )}
                     <p className="note" style={{ marginTop: 9 }}>
@@ -678,9 +930,12 @@ export default function Page() {
 
                 {tab === 'proof' && proof && (
                   <section className="block">
-                    <span className={`pill ${proof.verdict === 'globally-optimal' || proof.verdict === 'certified' ? 'good' : 'warn'}`}>
-                      <span className="dot" />{proof.verdict.replace(/-/g, ' ')}
-                    </span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span className={`pill ${proof.verdict === 'globally-optimal' || proof.verdict === 'certified' ? 'good' : 'warn'}`}>
+                        {Icon.shield}{proof.verdict.replace(/-/g, ' ')}
+                      </span>
+                      <Hint id="proof" />
+                    </div>
                     <p className="note" style={{ color: 'var(--ink-2)', margin: '10px 0 12px' }}>{proof.claim}</p>
                     <dl>
                       {proof.discreteTractable && <div className="kv"><dt>Sitings enumerated</dt><dd className="num">{num(proof.subsetsEnumerated)}</dd></div>}
@@ -695,44 +950,7 @@ export default function Page() {
         </div>
       </aside>
 
-      {/* ------------------------- map overlays ------------------------- */}
-      <div className="map-badges glass">
-        <span className="badge"><b className="num">{neighborhoods.length}</b> areas</span>
-        <span className="badge"><b className="num">{num(totalOrders)}</b> orders/day</span>
-        {showAfter && <span className="badge"><b className="num">{result!.warehouses.length}</b> warehouses</span>}
-        {showAfter && !!result!.over_capacity?.length && (
-          <span className="badge warn">over capacity · <b>{result!.over_capacity.join(', ')}</b></span>
-        )}
-        {showAfter && !!result!.out_of_radius?.length && (
-          <span className="badge warn"><b className="num">{result!.out_of_radius.length}</b> beyond {maxRadius} km</span>
-        )}
-      </div>
-
-      <div className="map-legend glass">
-        <div className="legend-title">{showAfter ? 'Optimised network' : 'Demand today'}</div>
-        {showAfter ? (
-          <>
-            {result!.warehouses.map((w, i) => (
-              <div key={w.id} className="legend-row"
-                   style={{ cursor: 'pointer', opacity: focused && focused !== w.id ? 0.3 : 1 }}
-                   onMouseEnter={() => setFocused(w.id)} onMouseLeave={() => setFocused(null)}>
-                <span className="legend-dot" style={{ background: SERIES[i % SERIES.length] }} />
-                {w.id}
-                <span className="num dim" style={{ marginLeft: 'auto', paddingLeft: 14 }}>{num(result!.load?.[w.id] ?? 0)}</span>
-              </div>
-            ))}
-            <div className="legend-row faint" style={{ fontSize: 10.5, marginTop: 3 }}>orders served per day</div>
-          </>
-        ) : (
-          <>
-            <div className="legend-row"><span className="legend-dot round" style={{ background: '#8a8a96' }} />one area</div>
-            <div className="legend-row faint" style={{ fontSize: 10.5 }}>circle area = daily orders</div>
-            {hasRun && <div className="legend-row"><span className="legend-dot hollow" />naive depot</div>}
-          </>
-        )}
-      </div>
-
-      {toast && <div className="toast glass">{toast}</div>}
+      {toast && <div className="toast" role="status">{toast}</div>}
     </div>
   );
 }
