@@ -63,6 +63,12 @@ export const SOURCES: Record<string, Sourced> = {
     basis: 'Per fleet: 100–125cc two-wheeler 46, three-wheeler 76, diesel LCV 228, light truck 402 g/km.',
     source: 'BS-VI type-approval CO₂ ranges by vehicle class',
   },
+  energyEv: {
+    label: 'Electric van energy',
+    value: '₹1.40 / km',
+    basis: 'About 0.20 kWh/km at roughly ₹7 a unit — Karnataka’s dedicated EV tariff is ₹5.00/kWh, blended up for public AC top-ups mid-shift. Priced separately from the petrol slider on purpose: electricity is its own tariff and does not move with the pump.',
+    source: 'State EV tariffs (Karnataka ₹5.00/kWh); public AC charging ₹8–15/kWh',
+  },
   co2Ev: {
     label: 'Electric van CO₂',
     value: '142 g / km',

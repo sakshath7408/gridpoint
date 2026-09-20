@@ -58,7 +58,11 @@ export const VEHICLES: Vehicle[] = [
   { id: 'truck', label: 'Light truck',   capacity: 420, fuelPerKm: 0.150, speedKmph: 26, upkeepPerKm: 6.2, co2GramsPerKm: 402, emoji: '🚚' },
   // EV CO2 is grid-derived, not zero: ~0.20 kWh/km x 0.710 kg CO2/kWh (CEA
   // v21.0, FY2024-25) = 142 g/km. Cleaner than a diesel van; not emission-free.
-  { id: 'ev',    label: 'Electric van',  capacity: 150, fuelPerKm: 0.011, speedKmph: 30, upkeepPerKm: 2.1, co2GramsPerKm: 142, emoji: '🔋' },
+  // Energy is priced separately from the petrol slider: 0.20 kWh/km at about
+  // Rs 7/kWh — Karnataka's dedicated EV tariff is Rs 5.00/kWh, blended up a
+  // little for public AC top-ups mid-shift. fuelPerKm is left at 0 because
+  // this van burns nothing.
+  { id: 'ev',    label: 'Electric van',  capacity: 150, fuelPerKm: 0,     speedKmph: 30, upkeepPerKm: 2.1, co2GramsPerKm: 142, energyCostPerKm: 1.40, emoji: '🔋' },
 ];
 
 export const TRAFFIC: import('./types').TrafficProfile[] = [
@@ -110,8 +114,12 @@ export const DEFAULT_CONSTRAINTS: Constraints = {
 /** Rs charged per kilometre actually driven, given vehicle + traffic + fuel price. */
 export function ratePerKm(c: Constraints): number {
   const effectiveSpeed = c.vehicle.speedKmph / c.traffic.congestion;
+  // An electric van charges from the grid, so its energy cost must not ride
+  // the petrol slider. Where a vehicle declares its own ₹/km, that replaces
+  // the fuel term; everything else still burns what the slider prices.
+  const energy = c.vehicle.energyCostPerKm ?? (c.vehicle.fuelPerKm * c.fuelPrice);
   return (
-    c.vehicle.fuelPerKm * c.fuelPrice +
+    energy +
     c.vehicle.upkeepPerKm +
     c.driverWage / effectiveSpeed
   );

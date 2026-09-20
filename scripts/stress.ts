@@ -230,6 +230,39 @@ for (const p of [
   auditResult(`param ${JSON.stringify(p)}`, big, 3, { ...DEFAULT_CONSTRAINTS, ...p });
 }
 
+console.log('=== 6a. CO2 must be derived from fuel burn, not invented ===');
+// petrol 2310 g CO2/litre, diesel 2680 g/litre. Every liquid-fuel vehicle's
+// declared CO2 must fall out of its declared consumption - if someone edits one
+// number and not the other, the table starts lying and nothing else would notice.
+for (const v of VEHICLES) {
+  if (!v.fuelPerKm) continue;                       // electric: grid-derived, checked separately
+  const petrol = v.fuelPerKm * 2310, diesel = v.fuelPerKm * 2680;
+  const matches = Math.abs(v.co2GramsPerKm - petrol) < 3 || Math.abs(v.co2GramsPerKm - diesel) < 3;
+  ok(`co2/${v.id}`, matches,
+    `${v.label}: ${v.co2GramsPerKm} g/km does not follow from ${v.fuelPerKm} L/km ` +
+    `(petrol would be ${petrol.toFixed(0)}, diesel ${diesel.toFixed(0)})`);
+}
+{
+  const ev = VEHICLES.find((v) => v.id === 'ev')!;
+  ok('co2/ev', ev.fuelPerKm === 0 && ev.co2GramsPerKm > 0,
+    'the electric van must burn no liquid fuel yet still carry grid emissions');
+}
+
+console.log('=== 6b. the electric van must not track the petrol price ===');
+{
+  const ev = VEHICLES.find((v) => v.id === 'ev')!;
+  const van = VEHICLES.find((v) => v.id === 'van')!;
+  const cheap = run(big, 3, { ...DEFAULT_CONSTRAINTS, vehicle: ev, fuelPrice: 50 });
+  const dear  = run(big, 3, { ...DEFAULT_CONSTRAINTS, vehicle: ev, fuelPrice: 300 });
+  ok('ev/petrol', Math.abs(cheap.total_cost - dear.total_cost) < 0.01,
+    `electric van cost moved with the PETROL price: Rs${cheap.total_cost.toFixed(0)} at Rs50/L vs Rs${dear.total_cost.toFixed(0)} at Rs300/L`);
+  // a diesel van, by contrast, absolutely should move
+  const vCheap = run(big, 3, { ...DEFAULT_CONSTRAINTS, vehicle: van, fuelPrice: 50 });
+  const vDear  = run(big, 3, { ...DEFAULT_CONSTRAINTS, vehicle: van, fuelPrice: 300 });
+  ok('van/petrol', vDear.total_cost > vCheap.total_cost + 1,
+    'diesel van cost did NOT move with the fuel price, which it must');
+}
+
 console.log('=== 7. determinism ===');
 for (const [label, ns] of Object.entries(SAMPLES)) {
   const a = run(ns, 4, DEFAULT_CONSTRAINTS);

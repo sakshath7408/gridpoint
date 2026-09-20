@@ -132,6 +132,19 @@ export interface Vehicle {
    * so it is low but not zero — which is the honest number.
    */
   co2GramsPerKm: number;
+  /**
+   * Energy cost in ₹/km, for vehicles that do not burn the fuel the price
+   * slider controls.
+   *
+   * Without this, an electric van's running cost was `fuelPerKm × fuelPrice`
+   * — i.e. it rose and fell with the PETROL price, which is not a thing that
+   * happens. Electricity is a separate tariff. When this is set it replaces
+   * the fuel term entirely, so the EV no longer tracks the pump.
+   *
+   * Optional and additive: vehicles that genuinely burn liquid fuel omit it
+   * and behave exactly as before, so the Python engine needs no change.
+   */
+  energyCostPerKm?: number;
   emoji: string;
 }
 
