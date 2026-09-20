@@ -1,7 +1,12 @@
-# GridPoint — *Where should the warehouse go?*
+# Sludge — *Where should the warehouse go?*
 
 **Hack-a-Matics 2026** · Pentagram (Mathematical Society of BMSCE) × BMSCE IEEE Computer Society
 Theme: **VECTOR** · Problem statement 1: **GRIDPOINT**
+
+> The product is called **Sludge**. *GridPoint* is the problem statement we are
+> answering, and it survives in the repository name, the deployment URL and the
+> manual's filename — renaming those would break links for no benefit. Where you
+> see GridPoint in a path, it is a path; where you see Sludge, it is the product.
 
 A warehouse location optimisation platform. Give it neighborhoods with daily
 order volumes, and it answers three questions a logistics company actually has:
@@ -22,7 +27,7 @@ On a 12-zone Bengaluru dataset (3,880 orders/day, two-wheeler fleet):
 | Network | Cost/day | |
 |---|---|---|
 | One depot, sited optimally — the best a single-depot operation can do | **₹27,870** | — |
-| GridPoint, K = 4 (the cost optimum it finds itself) | **₹18,824** | **32.5% cheaper** |
+| Sludge, K = 4 (the cost optimum it finds itself) | **₹18,824** | **32.5% cheaper** |
 | A k-means network at the same K | ₹19,222 | 2.1% worse than ours |
 
 That is **₹33.0 lakh a year** and **37 t of CO₂** avoided.

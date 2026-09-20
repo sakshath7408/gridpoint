@@ -174,7 +174,7 @@ const C = [];
 /* ============================== COVER ============================== */
 C.push(
   new Paragraph({ spacing: { before: 900, after: 0 }, children: [
-    R('GridPoint', { size: 80, bold: true, color: INK, track: -14 }),
+    R('Sludge', { size: 80, bold: true, color: INK, track: -14 }),
   ]}),
   new Paragraph({ spacing: { after: 320 }, children: [
     R('Where should the warehouse go?', { size: 26, color: MUTED }),
@@ -249,7 +249,7 @@ C.push(H1('1', 'What it does and how to use it'));
 C.push(P(
   'An operator serves a set of neighborhoods, each with a location and a daily order volume. '
   + 'Three decisions follow, usually made by intuition: how many warehouses, where, and who '
-  + 'serves whom. GridPoint answers all three by minimising cost in rupees per day.',
+  + 'serves whom. Sludge answers all three by minimising cost in rupees per day.',
 ));
 C.push(P(
   'On twelve Bengaluru zones carrying 3,880 orders a day, it replaces a single central depot '
@@ -320,7 +320,7 @@ C.push(P('Five demand scenarios reshape volumes so you can test whether the answ
 
 C.push(H2('The AI component'));
 C.push(P([
-  R('Real data never arrives with the column names you want. GridPoint embeds each header with '),
+  R('Real data never arrives with the column names you want. Sludge embeds each header with '),
   R('Xenova/all-MiniLM-L6-v2', { font: MONO, size: 18, color: INK }),
   R(' on WebAssembly '), R('inside the browser', { bold: true, color: INK }),
   R(' — no API key, no server, nothing leaves the machine — and matches by meaning:'),
@@ -428,7 +428,7 @@ C.push(P([R('K = 1 — proven globally optimal. ', { bold: true, color: INK }),
     + 'convex; so any local minimum is the global one. Weiszfeld’s iteration')]));
 C.push(EQ('x⁽ᵐ⁺¹⁾ = Σᵢ (wᵢpᵢ / ‖x⁽ᵐ⁾−pᵢ‖) / Σᵢ (wᵢ / ‖x⁽ᵐ⁾−pᵢ‖)'));
 C.push(P(
-  'is a descent method on that objective, so its fixed point is the global minimum. GridPoint '
+  'is a descent method on that objective, so its fixed point is the global minimum. Sludge '
   + 'is not reporting the best location it found — it is reporting the best that exists.',
 ));
 C.push(P([R('Caveat. ', { bold: true, italics: true, color: INK }),
@@ -502,7 +502,7 @@ C.push(NOTE('Agreement to 0.0001% on cost and ~2 m on position.',
 C.push(H1('3', 'How it compares'));
 C.push(P('Not against enterprise network-design suites, which do far more — against what a team would realistically reach for.', { after: 130 }));
 C.push(TABLE(
-  [{ w: 2400, label: 'Approach' }, { w: 3400, label: 'What it gets wrong' }, { w: 3560, label: 'GridPoint' }],
+  [{ w: 2400, label: 'Approach' }, { w: 3400, label: 'What it gets wrong' }, { w: 3560, label: 'Sludge' }],
   [
     ['Intuition / existing sites', 'Anchored on property already leased.', 'Searches the continuous plane.'],
     ['k-means clustering', 'Squared distance — 1.2–6.0% dearer at equal K.', 'Minimises the actual linear cost.'],
@@ -549,8 +549,8 @@ C.push(TABLE(
 
 /* ------------------------------------------------------------ assemble */
 const doc = new Document({
-  creator: 'GridPoint',
-  title: 'GridPoint — User Manual',
+  creator: 'Sludge',
+  title: 'Sludge — User Manual',
   description: 'Warehouse location optimisation for Indian last-mile delivery',
   numbering: { config: [
     { reference: 'b', levels: [{ level: 0, format: LevelFormat.BULLET, text: '—',
