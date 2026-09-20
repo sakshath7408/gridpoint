@@ -37,16 +37,149 @@ const blankStyle = (theme: Theme): maplibregl.StyleSpecification => ({
 });
 
 /**
- * How hard to knock the basemap back, per theme.
+ * Turning a LIGHT basemap into a real dark one.
  *
- * Positron is a light style. On paper it can run near full strength; on the
- * dark plane the same layers must drop to a faint grey substrate or they glow.
- * Stored so the theme toggle can repaint grafted layers in place rather than
- * tearing the style down and rebuilding it.
+ * Positron is a light style. The obvious move — drop every layer to a low
+ * opacity over a dark plane — does not work: it washes parks, water, landuse
+ * and roads into nearly the same muddy grey, because opacity compresses all of
+ * them toward the backdrop at once. It reads as a smudge, not a map.
+ *
+ * So for dark we RECOLOUR rather than dim. Each layer gets an explicit colour
+ * from a dark ramp, keyed off the layer id (these are the real OpenMapTiles /
+ * Positron ids, read from the running map rather than guessed). Roads stay
+ * legible because they are genuinely lighter than the land, water reads as
+ * water because it is blue-dark rather than grey-dark, and labels get a dark
+ * halo — without one, light text on a dark map smears into the lines under it.
+ *
+ * Light mode keeps Positron's own colours and only softens them, which is what
+ * the style was designed for.
  */
-const BASEMAP_PAINT = {
-  light: { fill: 0.72, line: 0.55, text: 0.62, icon: 0.4,  raster: 0.5  },
-  dark:  { fill: 0.07, line: 0.13, text: 0.30, icon: 0.18, raster: 0.18 },
+const DARK = {
+  land:        '#0e0e14',
+  water:       '#101c2e',   // clearly blue-dark, so water reads as water
+  waterway:    '#16293f',
+  park:        '#0f1913',
+  wood:        '#0d160f',
+  ice:         '#12151c',
+  // Landuse sits within a hair of the land colour on purpose. At city zoom the
+  // residential polygons are what turn a dark map into visual noise, and they
+  // tell you nothing a warehouse siting tool needs.
+  residential: '#0f0f15',
+  building:    '#1c1c25',
+  aeroway:     '#14141b',
+
+  // Roads ARE the dark map. They have to be decisively lighter than the land,
+  // not a suggestion of a line.
+  motorway:    '#7d7d8e',
+  motorwayCase:'#22222b',
+  major:       '#5f5f6f',
+  majorCase:   '#1e1e26',
+  minor:       '#43434f',
+  path:        '#2e2e38',
+  subtle:      '#3a3a45',
+  rail:        '#353541',
+  boundary:    '#454552',
+
+  // Labels are near-white and set in Bold, with a tight dark halo. Grey text at
+  // partial opacity is the single thing that made the old dark map unreadable.
+  label:       '#f2f2f7',
+  labelMinor:  '#c4c4d0',
+  halo:        '#06060a',
+} as const;
+
+/**
+ * Bold face for dark-mode labels.
+ *
+ * Verified against the live style before adopting: the Positron style already
+ * declares "Noto Sans Bold" for some layers and the glyph endpoint returns 200
+ * for that stack, so requesting it cannot leave us with missing text. The
+ * original stack is kept as a fallback regardless.
+ */
+const BOLD_FONT = ['Noto Sans Bold', 'Noto Sans Regular'];
+
+/** Explicit dark colour for a Positron layer, by id. */
+function darkFill(id: string): string {
+  if (id === 'water') return DARK.water;
+  if (id === 'park') return DARK.park;
+  if (id.includes('wood') || id.includes('grass')) return DARK.wood;
+  if (id.includes('ice_shelf') || id.includes('glacier')) return DARK.ice;
+  if (id.includes('residential') || id.startsWith('landuse')) return DARK.residential;
+  if (id === 'building') return DARK.building;
+  if (id.includes('aeroway') || id.includes('pier')) return DARK.aeroway;
+  return DARK.residential;
+}
+
+function darkLine(id: string): string {
+  if (id === 'waterway') return DARK.waterway;
+  if (id.includes('motorway')) return id.includes('casing') ? DARK.motorwayCase : DARK.motorway;
+  if (id.includes('major')) {
+    if (id.includes('casing')) return DARK.majorCase;
+    if (id.includes('subtle')) return DARK.subtle;
+    return DARK.major;
+  }
+  if (id.includes('minor')) return DARK.minor;
+  if (id.includes('path')) return DARK.path;
+  if (id.includes('railway')) return DARK.rail;
+  if (id.includes('boundary')) return DARK.boundary;
+  if (id.includes('aeroway') || id.includes('pier')) return DARK.aeroway;
+  return DARK.minor;
+}
+
+/** Settlement names carry the map; road names and shields recede. */
+function darkLabel(id: string): string {
+  if (id.startsWith('label_')) return DARK.label;
+  return DARK.labelMinor;
+}
+
+/**
+ * Restyle one basemap layer for the given theme.
+ * Returns a NEW layer object — never mutates the fetched style, which is
+ * cached and re-used every time the theme changes.
+ */
+function styleForTheme(layer: maplibregl.LayerSpecification, theme: Theme): maplibregl.LayerSpecification {
+  const l = { ...layer } as Record<string, unknown>;
+  const paint = { ...((layer as { paint?: Record<string, unknown> }).paint ?? {}) };
+  const layout = { ...((layer as { layout?: Record<string, unknown> }).layout ?? {}) };
+  const id = layer.id;
+
+  if (theme === 'dark') {
+    if (layer.type === 'fill') {
+      paint['fill-color'] = darkFill(id);
+      // Buildings give texture close in; everything else is flat and quiet.
+      paint['fill-opacity'] = id === 'building' ? 0.45 : 1;
+      delete paint['fill-outline-color'];
+    }
+    if (layer.type === 'line') {
+      paint['line-color'] = darkLine(id);
+      paint['line-opacity'] = 1;          // no translucent roads
+    }
+    if (layer.type === 'symbol') {
+      paint['text-color'] = darkLabel(id);
+      paint['text-opacity'] = 1;          // no translucent labels
+      paint['text-halo-color'] = DARK.halo;
+      paint['text-halo-width'] = 1.8;
+      paint['text-halo-blur'] = 0.2;
+      layout['text-font'] = BOLD_FONT;
+      // Road shields are bitmaps drawn for a light background; they read as
+      // stickers on a dark one and cannot be restyled, so they go.
+      paint['icon-opacity'] = id.includes('shield') ? 0 : 0.55;
+    }
+  } else {
+    // Positron's own colours, just quieter so the data stays the subject.
+    if (layer.type === 'fill')   paint['fill-opacity'] = 0.72;
+    if (layer.type === 'line')   paint['line-opacity'] = 0.55;
+    if (layer.type === 'symbol') { paint['text-opacity'] = 0.62; paint['icon-opacity'] = 0.4; }
+  }
+
+  l.paint = paint;
+  if (Object.keys(layout).length) l.layout = layout;
+  return l as maplibregl.LayerSpecification;
+}
+
+/** Raster fallback tuning, per theme. */
+const RASTER_PAINT = {
+  light: { 'raster-opacity': 0.5,  'raster-saturation': -1, 'raster-brightness-min': 0.35 },
+  dark:  { 'raster-opacity': 0.22, 'raster-saturation': -1, 'raster-brightness-max': 0.5 },
 } as const;
 
 const RASTER_STYLE: maplibregl.StyleSpecification = {
@@ -89,36 +222,53 @@ async function probe(url: string, ms = 3500): Promise<Response | null> {
  * So we probe first and only graft what answers. Worst case the backdrop stays
  * plain and every neighborhood, line and warehouse still renders.
  */
-async function upgradeBasemap(m: MLMap, theme: Theme, grafted: string[]): Promise<'vector' | 'raster' | 'none'> {
-  const P = BASEMAP_PAINT[theme];
-  const insertBeforeData = (layer: maplibregl.LayerSpecification) => {
-    m.addLayer(layer, m.getLayer('lines') ? 'lines' : undefined);
-  };
+/** The fetched style, kept so a theme switch can re-graft without re-fetching. */
+interface BasemapCache { style: maplibregl.StyleSpecification | null; kind: 'vector' | 'raster' | 'none'; }
 
+/** Remove every layer we previously grafted, leaving our data layers alone. */
+function ungraft(m: MLMap, grafted: string[]) {
+  for (const id of grafted) { if (m.getLayer(id)) m.removeLayer(id); }
+  grafted.length = 0;
+}
+
+/** Add the cached basemap, styled for `theme`, underneath our data layers. */
+function graft(m: MLMap, cache: BasemapCache, theme: Theme, grafted: string[]) {
+  const before = m.getLayer('lines') ? 'lines' : undefined;
+
+  if (cache.kind === 'vector' && cache.style) {
+    for (const [id, src] of Object.entries(cache.style.sources ?? {})) {
+      if (!m.getSource(id)) m.addSource(id, src);
+    }
+    for (const layer of cache.style.layers ?? []) {
+      if (layer.type === 'background') continue;
+      if (m.getLayer(layer.id)) continue;
+      m.addLayer(styleForTheme(layer, theme), before);
+      grafted.push(layer.id);
+    }
+    return;
+  }
+
+  if (cache.kind === 'raster') {
+    if (!m.getSource('osm')) {
+      m.addSource('osm', RASTER_STYLE.sources.osm as maplibregl.SourceSpecification);
+    }
+    if (!m.getLayer('osm')) {
+      m.addLayer({ id: 'osm', type: 'raster', source: 'osm', paint: { ...RASTER_PAINT[theme] } }, before);
+      grafted.push('osm');
+    }
+  }
+}
+
+async function upgradeBasemap(
+  m: MLMap, theme: Theme, grafted: string[], cache: BasemapCache,
+): Promise<'vector' | 'raster' | 'none'> {
   // --- vector (preferred): the style JSON doubles as the reachability probe.
   const styleRes = await probe(VECTOR_STYLE);
   if (styleRes) {
     try {
-      const style = (await styleRes.json()) as maplibregl.StyleSpecification;
-      for (const [id, src] of Object.entries(style.sources ?? {})) {
-        if (!m.getSource(id)) m.addSource(id, src);
-      }
-      for (const layer of style.layers ?? []) {
-        if (layer.type === 'background') continue;
-        if (m.getLayer(layer.id)) continue;
-        // At full strength the basemap competes with the data. Soften every
-        // layer so streets and labels read as context — present enough to
-        // orient you, quiet enough that the circles and markers are
-        // unambiguously the subject. How far to soften depends on the theme.
-        const l = { ...layer } as Record<string, unknown>;
-        const paint = { ...((layer as { paint?: Record<string, unknown> }).paint ?? {}) };
-        if (layer.type === 'fill')   { paint['fill-opacity'] = P.fill; }
-        if (layer.type === 'line')   { paint['line-opacity'] = P.line; }
-        if (layer.type === 'symbol') { paint['text-opacity'] = P.text; paint['icon-opacity'] = P.icon; }
-        l.paint = paint;
-        insertBeforeData(l as maplibregl.LayerSpecification);
-        grafted.push(layer.id);
-      }
+      cache.style = (await styleRes.json()) as maplibregl.StyleSpecification;
+      cache.kind = 'vector';
+      graft(m, cache, theme, grafted);
       return 'vector';
     } catch { /* fall through */ }
   }
@@ -127,23 +277,14 @@ async function upgradeBasemap(m: MLMap, theme: Theme, grafted: string[]): Promis
   const tileRes = await probe('https://tile.openstreetmap.org/10/730/438.png');
   if (tileRes) {
     try {
-      if (!m.getSource('osm')) {
-        m.addSource('osm', RASTER_STYLE.sources.osm as maplibregl.SourceSpecification);
-      }
-      if (!m.getLayer('osm')) {
-        insertBeforeData({
-          id: 'osm', type: 'raster', source: 'osm',
-          paint: theme === 'light'
-            ? { 'raster-opacity': P.raster, 'raster-saturation': -1, 'raster-brightness-min': 0.35 }
-            : { 'raster-opacity': P.raster, 'raster-saturation': -1, 'raster-brightness-max': 0.55 },
-        });
-        grafted.push('osm');
-      }
+      cache.kind = 'raster';
+      graft(m, cache, theme, grafted);
       return 'raster';
     } catch { /* fall through */ }
   }
 
   // --- neither reachable: keep the blank backdrop. The data still renders.
+  cache.kind = 'none';
   return 'none';
 }
 
@@ -168,6 +309,7 @@ export default function MapView({ neighborhoods, result, mode, focusedWarehouse,
   // in place. Rebuilding the style instead would drop our data layers and
   // re-run the whole probe — a visible flicker on every toggle.
   const grafted = useRef<string[]>([]);
+  const basemap = useRef<BasemapCache>({ style: null, kind: 'none' });
   // Read inside the map-creation effect, which must not re-run on theme change.
   const themeRef = useRef<Theme>(theme);
   themeRef.current = theme;
@@ -193,7 +335,7 @@ export default function MapView({ neighborhoods, result, mode, focusedWarehouse,
     // Data layers go on as soon as the (instant, offline) blank style is up.
     m.on('load', () => {
       setReady(true);
-      void upgradeBasemap(m, themeRef.current, grafted.current);
+      void upgradeBasemap(m, themeRef.current, grafted.current, basemap.current);
     });
 
     // MapLibre measures its container once at construction. In a flex/grid
@@ -402,37 +544,19 @@ export default function MapView({ neighborhoods, result, mode, focusedWarehouse,
     }
   }, [neighborhoods, result, mode, ready, focusedWarehouse, theme]);
 
-  // ---- repaint the basemap when the theme changes ----
-  // Data layers are redrawn by the effect above (theme is in its deps); the
-  // grafted basemap layers are not React-owned, so they are repainted here.
+  // ---- restyle the basemap when the theme changes ----
+  // Dark is a full recolour, not a dimming, so there is no single paint
+  // property to flip. We drop the grafted layers and re-add them from the
+  // CACHED style JSON — no refetch, no flicker, and our data layers are never
+  // touched because they are not in `grafted`.
   useEffect(() => {
     const m = map.current;
     if (!m || !ready) return;
-    const P = BASEMAP_PAINT[theme];
     try {
       if (m.getLayer('bg')) m.setPaintProperty('bg', 'background-color', MAP_NEUTRAL[theme].bg);
-      for (const id of grafted.current) {
-        const layer = m.getLayer(id);
-        if (!layer) continue;
-        if (layer.type === 'fill')   m.setPaintProperty(id, 'fill-opacity', P.fill);
-        if (layer.type === 'line')   m.setPaintProperty(id, 'line-opacity', P.line);
-        if (layer.type === 'symbol') {
-          m.setPaintProperty(id, 'text-opacity', P.text);
-          m.setPaintProperty(id, 'icon-opacity', P.icon);
-        }
-        if (layer.type === 'raster') {
-          m.setPaintProperty(id, 'raster-opacity', P.raster);
-          // brightness-max suits the dark plane, brightness-min the light one;
-          // clear the other so a toggle does not leave both applied.
-          if (theme === 'dark') {
-            m.setPaintProperty(id, 'raster-brightness-min', 0);
-            m.setPaintProperty(id, 'raster-brightness-max', 0.55);
-          } else {
-            m.setPaintProperty(id, 'raster-brightness-max', 1);
-            m.setPaintProperty(id, 'raster-brightness-min', 0.35);
-          }
-        }
-      }
+      if (basemap.current.kind === 'none') return;
+      ungraft(m, grafted.current);
+      graft(m, basemap.current, theme, grafted.current);
     } catch { /* style mid-reload: the next draw picks it up */ }
   }, [theme, ready]);
 

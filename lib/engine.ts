@@ -56,7 +56,9 @@ export const VEHICLES: Vehicle[] = [
   { id: 'auto',  label: 'Three-wheeler', capacity: 60,  fuelPerKm: 0.033, speedKmph: 28, upkeepPerKm: 1.6, co2GramsPerKm: 76,  emoji: '🛺' },
   { id: 'van',   label: 'Delivery van',  capacity: 180, fuelPerKm: 0.085, speedKmph: 30, upkeepPerKm: 3.4, co2GramsPerKm: 228, emoji: '🚐' },
   { id: 'truck', label: 'Light truck',   capacity: 420, fuelPerKm: 0.150, speedKmph: 26, upkeepPerKm: 6.2, co2GramsPerKm: 402, emoji: '🚚' },
-  { id: 'ev',    label: 'Electric van',  capacity: 150, fuelPerKm: 0.011, speedKmph: 30, upkeepPerKm: 2.1, co2GramsPerKm: 110, emoji: '🔋' },
+  // EV CO2 is grid-derived, not zero: ~0.20 kWh/km x 0.710 kg CO2/kWh (CEA
+  // v21.0, FY2024-25) = 142 g/km. Cleaner than a diesel van; not emission-free.
+  { id: 'ev',    label: 'Electric van',  capacity: 150, fuelPerKm: 0.011, speedKmph: 30, upkeepPerKm: 2.1, co2GramsPerKm: 142, emoji: '🔋' },
 ];
 
 export const TRAFFIC: import('./types').TrafficProfile[] = [
@@ -86,15 +88,19 @@ export const DEMAND_SCENARIOS: DemandScenario[] = [
 // *within* a neighborhood is deliberately excluded: it is essentially
 // independent of where the warehouse sits, so it cannot change the optimum,
 // and including it would only inflate the headline number.
+/**
+ * Defaults, each sourced. See `lib/sources.ts` for the full provenance table,
+ * which the interface and the user manual both render.
+ */
 export const DEFAULT_CONSTRAINTS: Constraints = {
   capacity: 0,
   maxRadiusKm: 0,
   vehicle: VEHICLES[0],
   traffic: TRAFFIC[1],
-  fuelPrice: 102,          // Rs/litre
-  driverWage: 145,         // Rs/hour, fully loaded
-  warehouseCostPerDay: 2500,
-  roadFactor: 1.32,
+  fuelPrice: 111,          // Rs/litre — Bengaluru pump price, 19 Sep 2026 (Rs 110.93)
+  driverWage: 120,         // Rs/hour — metro rider gross Rs 15-30k/mo over ~208 h, upper-middle
+  warehouseCostPerDay: 2500, // Rs/day — 500-800 sq ft micro-hub, ~Rs 75k/month
+  roadFactor: 1.32,        // urban street-network circuity, measured 1.2-1.4
 };
 
 // ---------------------------------------------------------------------------
