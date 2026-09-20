@@ -21,9 +21,16 @@ On a 12-zone Bengaluru dataset (3,880 orders/day, two-wheeler fleet):
 
 | Network | Cost/day | |
 |---|---|---|
-| One depot at the map centre — the un-optimised status quo | **₹30,360** | — |
-| GridPoint, K = 4 (the cost optimum it finds itself) | **₹19,690** | **35.1% cheaper** |
-| A k-means network at the same K | ₹20,127 | 2.2% worse than ours |
+| One depot, sited optimally — the best a single-depot operation can do | **₹27,870** | — |
+| GridPoint, K = 4 (the cost optimum it finds itself) | **₹18,824** | **32.5% cheaper** |
+| A k-means network at the same K | ₹19,222 | 2.1% worse than ours |
+
+That is **₹33.0 lakh a year** and **37 t of CO₂** avoided.
+
+The baseline is deliberately the *strongest* single-depot alternative — the weighted
+1-median, found by the same solver — not a depot dumped at the map centre. Comparing
+against a badly-sited depot would have reported 36.9% instead of 32.5%. We quote the
+smaller number because it is the one that survives scrutiny.
 
 ---
 

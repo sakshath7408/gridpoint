@@ -393,11 +393,28 @@ export function run(
   const kk = Math.max(1, Math.min(Math.floor(k), neighborhoods.length));
   const weights = costWeights(neighborhoods, c);
 
-  // ---- Baseline: ONE un-optimised warehouse at the plain geographic centre.
-  // This is the "we put it in the middle of the map" decision a company makes
-  // without a model. Everything is served from it.
-  const centre = geographicCentre(neighborhoods);
-  const baselineWarehouse: Warehouse = { id: 'Baseline', lat: centre.lat, lon: centre.lon };
+  // ---- Baseline: ONE warehouse, sited as well as a single warehouse can be.
+  //
+  // This used to be the plain geographic centre — the "put it in the middle of
+  // the map" decision. That flattered us. Measuring a K-depot network against a
+  // deliberately badly-placed depot inflates the saving, and the honest
+  // counterfactual is not a company that sites its one warehouse stupidly: it
+  // is a company that sites its one warehouse WELL and still only has one.
+  //
+  // So the baseline is now the weighted 1-median of the same demand, found by
+  // the same solver. Every rupee we claim to save is therefore saved against
+  // the best possible single-depot operation, not against a straw man. It is
+  // the smaller number and the defensible one.
+  //
+  // It also makes the interface self-consistent: the headline percentage, the
+  // rupees-per-year tile and the CO2 tile now all divide by the same thing.
+  const basePlacement = placeWarehouses(neighborhoods, 1, weights);
+  const centre = basePlacement.centers[0] ?? geographicCentre(neighborhoods);
+  const baselineWarehouse: Warehouse = {
+    id: 'Baseline',
+    lat: Number(centre.lat.toFixed(6)),
+    lon: Number(centre.lon.toFixed(6)),
+  };
   const baselineAssignments = Object.fromEntries(
     neighborhoods.map((n) => [n.id, 'Baseline']),
   );
@@ -496,7 +513,7 @@ export function run(
     loads: load,
     unserved: outOfRadius,
     baseline: {
-      definition: 'One warehouse at the plain unweighted geographic centre',
+      definition: 'One warehouse, sited optimally (weighted 1-median) — the best a single-depot operation can do',
       warehouses: [baselineWarehouse],
       assignments: baselineAssignments,
     },
