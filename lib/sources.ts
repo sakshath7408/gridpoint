@@ -48,8 +48,8 @@ export const SOURCES: Record<string, Sourced> = {
   capacityBike: {
     label: 'Two-wheeler load',
     value: '25 parcels per trip',
-    basis: 'A standard 60–90 litre delivery top-box against an average e-commerce parcel of 2–4 litres. This models e-commerce parcel delivery, which is what the brief describes — not 10-minute grocery runs, where a rider carries 1–3 orders.',
-    source: 'Delivery top-box volumes; parcel dimensional data',
+    basis: 'Derived from rider throughput rather than box volume. An urban e-commerce rider completes 80–100 deliveries a day, run as three or four loads out of the hub — roughly 20–33 parcels a load. We take 25. This models e-commerce parcel delivery, which is what the brief describes, not 10-minute grocery runs where a rider carries 1–3 orders.',
+    source: 'India.com, “How much do Amazon, Flipkart, Myntra delivery boys make” — 80–100 deliveries/day in Delhi-NCR',
   },
   roadFactor: {
     label: 'Road detour factor',
