@@ -7,7 +7,7 @@ import './globals.css';
 import { THEME_BOOT_SCRIPT } from '@/lib/theme';
 
 export const metadata: Metadata = {
-  title: 'GridPoint — Where should the warehouse go?',
+  title: 'Sludge — Where should the warehouse go?',
   description:
     'Warehouse location optimisation. Weighted k-medians with a certified-optimal '
     + 'solver, a full Indian last-mile cost model, and an in-browser AI column mapper.',

@@ -21,7 +21,7 @@ export default function ManualPage() {
               <circle cx="8" cy="8" r="2" fill="currentColor" stroke="none" />
             </svg>
           </span>
-          <span className="logo">GridPoint</span>
+          <span className="logo">Sludge</span>
           <span className="logo-sub">User manual and mathematical reference</span>
         </div>
         <div className="head-spacer" />
@@ -31,7 +31,7 @@ export default function ManualPage() {
 
       <div className="manual-body">
         <object data="/GridPoint-User-Manual.pdf#view=FitH" type="application/pdf"
-                aria-label="GridPoint user manual">
+                aria-label="Sludge user manual">
           {/* Shown only when the browser cannot render a PDF inline. */}
           <div className="manual-fallback">
             <p>Your browser cannot display the PDF inline.</p>
