@@ -941,6 +941,7 @@ export default function Page() {
             <div style={{ marginTop: 12 }}>
               <Source id="capacityBike" />
               <Source id="roadFactor" />
+              <Source id="energyEv" />
               <Source id="co2Ev" />
             </div>
             <p className="note" style={{ marginTop: 10 }}>
