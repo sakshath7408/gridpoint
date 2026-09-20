@@ -360,7 +360,15 @@ function Coverage({ open, onClose, hasRun }: { open: boolean; onClose: () => voi
     if (!open) return;
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
     window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    // Lock the page behind the sheet. Without this a wheel gesture that starts
+    // over the scrim scrolls the tool underneath, which reads as "the list is
+    // broken" even once the list itself scrolls correctly.
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      document.body.style.overflow = prev;
+    };
   }, [open, onClose]);
   if (!mounted || !open) return null;
 
