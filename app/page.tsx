@@ -716,7 +716,7 @@ export default function Page() {
     if (!result || !sweep || !bd) return '';
     const base = sweep.points[0].total;
     return [
-      `GridPoint — ${neighborhoods.length} areas, ${num(totalOrders)} orders/day (${source === 'sample' ? sampleName : 'uploaded data'}).`,
+      `Sludge — ${neighborhoods.length} areas, ${num(totalOrders)} orders/day (${source === 'sample' ? sampleName : 'uploaded data'}).`,
       `K=${result.warehouses.length}: ${inr(result.total_cost)}/day vs ${inr(base)} for one central depot — ${saving.toFixed(1)}% cheaper.`,
       `Cost optimum is K=${sweep.optimalK}${sweep.optimalK !== result.warehouses.length ? ` (${inr(sweep.points[sweep.optimalK - 1].total)}/day)` : ''}.`,
       `Weighted k-medians beats a k-means network at the same K by ${(result.placement_gain_pct ?? 0).toFixed(1)}%.`,
@@ -749,11 +749,11 @@ export default function Page() {
       <header className="head">
         <div className="brand">
           <span className="logo-mark">{Icon.pin}</span>
-          <span className="logo">GridPoint</span>
+          <span className="logo">Sludge</span>
           <span className="logo-sub">Where should the warehouse go?</span>
         </div>
         <div className="head-spacer" />
-        <a className="btn sm" href="/manual" title="User manual and mathematical reference">Manual</a>
+        <a className="btn sm" href="/manual" title="User manual and mathematical reference">How to use?</a>
         <button id="btn-cov" className="btn sm cov-btn" onClick={() => setCovOpen(true)}
                 aria-label="Show requirement coverage">
           {Icon.check}<span>All 17 features</span>
@@ -987,7 +987,7 @@ export default function Page() {
           </Fold>
         </div>
         <footer className="panel-foot">
-          <a href="/manual">Manual</a>
+          <a href="/manual">How to use?</a>
           <a href="https://github.com/sakshath7408/gridpoint" target="_blank" rel="noreferrer">Source ↗</a>
         </footer>
       </aside>
