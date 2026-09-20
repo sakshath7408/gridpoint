@@ -361,6 +361,26 @@ export default function MapView({ neighborhoods, result, mode, focusedWarehouse,
     const SERIES = seriesFor(theme);
     const NEUTRAL = MAP_NEUTRAL[theme];
 
+    /**
+     * Data-layer weights, per theme.
+     *
+     * A line that reads correctly on a pale background disappears on a dark
+     * one: the same 42% alpha that looks restrained over Positron's near-white
+     * land is, against #0e0e14, a line you cannot follow from zone to depot.
+     * Dark therefore gets near-opaque spokes and a little more width, and the
+     * demand circles get a stronger ring, because on dark it is the ring and
+     * not the wash that carries the hue.
+     *
+     * `dim` is the de-emphasis used when one warehouse is focused. It stays
+     * low in both themes — that is its job — but not so low on dark that the
+     * unfocused network vanishes completely and the map looks broken.
+     */
+    const W = theme === 'dark'
+      ? { line: 0.9,  lineDim: 0.14, lineWidth: 1.9, fill: 0.20, fillDim: 0.07,
+          ring: 1.0,  ringDim: 0.22, ringWidth: 1.7 }
+      : { line: 0.42, lineDim: 0.06, lineWidth: 1.2, fill: 0.22, fillDim: 0.06,
+          ring: 0.9,  ringDim: 0.15, ringWidth: 1.1 };
+
     const colourOf = (wid: string) => {
       const i = result?.warehouses.findIndex((w) => w.id === wid) ?? -1;
       return i >= 0 ? SERIES[i % SERIES.length] : NEUTRAL.baseline;
@@ -386,7 +406,11 @@ export default function MapView({ neighborhoods, result, mode, focusedWarehouse,
 
         return [{
           type: 'Feature' as const,
-          properties: { colour, opacity: dim ? 0.06 : 0.42, width: 1.2 },
+          properties: {
+            colour,
+            opacity: dim ? W.lineDim : W.line,
+            width: W.lineWidth,
+          },
           geometry: {
             type: 'LineString' as const,
             coordinates: [[n.lon, n.lat], [target.lon, target.lat]],
@@ -412,10 +436,10 @@ export default function MapView({ neighborhoods, result, mode, focusedWarehouse,
             // actual hue. Before a run everything is plain neutral.
             colour: showResult ? colourOf(wid) : NEUTRAL.fill,
             radius: 5 + 13 * Math.sqrt(n.orders / maxOrders),
-            opacity: dim ? 0.06 : showResult ? 0.22 : 0.14,
+            opacity: dim ? W.fillDim : showResult ? W.fill : W.fill * 0.65,
             stroke: out ? NEUTRAL.warn : showResult ? colourOf(wid) : NEUTRAL.stroke,
-            strokeW: out ? 1.6 : 1.1,
-            strokeOpacity: dim ? 0.15 : out ? 1 : 0.9,
+            strokeW: out ? W.ringWidth + 0.5 : W.ringWidth,
+            strokeOpacity: dim ? W.ringDim : out ? 1 : W.ring,
           },
           geometry: { type: 'Point' as const, coordinates: [n.lon, n.lat] },
         };
