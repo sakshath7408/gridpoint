@@ -169,6 +169,7 @@ const TABLE = (cols, rows, o = {}) => {
 };
 
 /* -------------------------------------------------------------- content */
+/* -------------------------------------------------------------- content */
 const C = [];
 
 /* ============================== COVER ============================== */
@@ -177,377 +178,367 @@ C.push(
     R('Sludge', { size: 80, bold: true, color: INK, track: -14 }),
   ]}),
   new Paragraph({ spacing: { after: 320 }, children: [
-    R('Where should the warehouse go?', { size: 26, color: MUTED }),
+    R('User manual', { size: 26, color: MUTED }),
   ]}),
 );
 
 C.push(STATS([
-  ['32.5%',  'cheaper than one optimally-sited depot'],
-  ['₹33.0L', 'saved per year'],
-  ['37 t',   'CO₂ avoided per year'],
-  ['0.0001%', 'cross-validation gap'],
+  ['9',  'Indian city datasets built in'],
+  ['5',  'vehicle fleets to model'],
+  ['17', 'features from the brief'],
+  ['0',  'servers or API keys needed'],
 ]));
 
 C.push(SP(260));
 C.push(P([
-  R('Warehouse location optimisation for Indian last-mile delivery. Decides how many '
-    + 'warehouses to build, where each one goes, and which neighborhoods it serves — by '
-    + 'minimising real operating cost in rupees, and showing which of its answers are '
-    + 'proven rather than merely good.', { size: 21, color: BODY }),
+  R('Sludge decides how many warehouses to build, where each one goes, and which '
+    + 'neighborhoods it serves — by minimising real operating cost in rupees per day. '
+    + 'This manual explains every control in the interface: what it does, and why it is '
+    + 'there. No mathematics background is assumed.', { size: 21, color: BODY }),
 ], { after: 300, line: 290 }));
 
 C.push(TABLE(
   [{ w: 2100, label: '' }, { w: 7260, label: '' }],
   [
     ['Live application', 'gridpointsludge.vercel.app'],
-    ['Source code', 'github.com/sakshath7408/gridpoint'],
-    ['Problem statement', 'GRIDPOINT · Theme VECTOR · Hack-a-Matics 2026'],
+    ['Runs in', 'Any modern browser. Nothing to install.'],
+    ['Your data', 'Never leaves your machine.'],
   ],
 ));
 
 C.push(SP(300));
 C.push(LABEL('Contents'));
-// Page numbers verified against the rendered PDF, not guessed. If content
-// shifts, re-render and re-check: pdftotext -f N -l N <pdf> - | grep '^[0-9]  '
 const TOC = [
-  ['1', 'What it does and how to use it', 2],
-  ['2', 'The mathematics', 3],
-  ['3', 'How it compares', 5],
-  ['4', 'Limitations and technical summary', 6],
+  ['1', 'Getting started', 2],
+  ['2', 'Loading your data', 3],
+  ['3', 'Choosing how many warehouses', 4],
+  ['4', 'Fleet, costs and constraints', 4],
+  ['5', 'Reading the results', 5],
+  ['6', 'Sharing and exporting', 6],
+  ['7', 'The numbers behind the model', 6],
+  ['8', 'If something looks wrong', 7],
 ];
 for (const [n, t, pg] of TOC) {
   C.push(new Paragraph({
     spacing: { after: 60, line: 258 },
     tabStops: [{ type: TabStopType.RIGHT, position: CW, leader: LeaderType.DOT }],
     children: [
-      R(n + '   ', { bold: true, size: 20, color: ACCENT }),
+      R(n + '   ', { bold: true, size: 20, color: ACCENT }),
       R(t, { size: 20, color: INK }),
       R('\t', { size: 20 }),
       R(String(pg), { size: 20, color: MUTED }),
     ],
   }));
 }
-C.push(SP(260));
-C.push(LABEL('Team'));
-C.push(TABLE(
-  [{ w: 2100, label: '' }, { w: 7260, label: '' }],
-  [
-    ['Tejas', 'Mathematical model and Python reference implementation'],
-    ['Sakshath', 'Web application, cost model, AI component, deployment'],
-    ['Rajath', 'Brute-force verifier'],
-  ],
-));
-C.push(SP(150));
-C.push(P([R('Every figure in this document is produced by the committed code.',
-  { size: 17, color: MUTED, italics: true })]));
 
 C.push(new Paragraph({ children: [new PageBreak()] }));
 
-/* ========================= 1. PRODUCT ========================= */
-C.push(H1('1', 'What it does and how to use it'));
+/* ========================= 1. GETTING STARTED ========================= */
+C.push(H1('1', 'Getting started'));
 
 C.push(P(
-  'An operator serves a set of neighborhoods, each with a location and a daily order volume. '
-  + 'Three decisions follow, usually made by intuition: how many warehouses, where, and who '
-  + 'serves whom. Sludge answers all three by minimising cost in rupees per day.',
+  'Sludge answers three questions a delivery operator actually has: how many warehouses to '
+  + 'build, where to put them, and which neighborhoods each one should serve. You give it '
+  + 'locations and daily order volumes; it gives you a costed answer.',
 ));
+
+C.push(H2('The sixty-second version'));
+C.push(NUM('Pick a sample city, or upload your own CSV.'));
+C.push(NUM('Press Optimise. Warehouses appear on the map, colour-coded by who they serve.'));
+C.push(NUM('Click "Use the optimum" to let Sludge choose the number of warehouses for you.'));
+C.push(NUM('Read the result: the saving, the cost per day, and where the money goes.'));
+C.push(SP(140));
+
+C.push(NOTE('Everything is local.',
+  'There is no server and no API key. The optimiser, the cost model and the AI column '
+  + 'mapper all run inside your browser, so your data never leaves your machine and '
+  + 'nothing can fail mid-demonstration because a service was slow.'));
+
+C.push(SP(200));
+C.push(H2('The three columns'));
+C.push(P('The screen is divided by what each part is for.', { after: 130 }));
+
+C.push(TABLE(
+  [{ w: 2000, label: 'Where' }, { w: 7360, label: 'What lives there' }],
+  [
+    ['Left', 'Everything you set. Your data, the number of warehouses, the fleet and cost assumptions, and any constraints.'],
+    ['Centre', 'The map. Neighborhoods as circles sized by order volume, warehouses as labelled markers, and lines showing who serves whom.'],
+    ['Right', 'Everything Sludge tells you. Before you run it, the four steps it will take. Afterwards, the result and the evidence behind it.'],
+  ],
+));
+
+C.push(SP(200));
+C.push(H2('Two things worth knowing first'));
+
+C.push(TABLE(
+  [{ w: 2400, label: 'Control' }, { w: 6960, label: 'Why it is there' }],
+  [
+    ['All 17 features', 'Every requirement from the brief, mapped to the control that satisfies it. Click any row and Sludge scrolls to that control and highlights it. Use this if you are looking for something and cannot find it.'],
+    ['Light / dark', 'The interface ships dark. The toggle switches to a light theme; both are checked for colour-blind separation and text contrast, so nothing depends on colour alone.'],
+  ],
+));
+
+C.push(new Paragraph({ children: [new PageBreak()] }));
+
+/* ========================= 2. DATA ========================= */
+C.push(H1('2', 'Loading your data'));
+
 C.push(P(
-  'On twelve Bengaluru zones carrying 3,880 orders a day, it replaces a single central depot '
-  + 'at ₹27,870/day with four warehouses at ₹18,824 — 32.5% cheaper. The single depot it is '
-  + 'compared against is itself optimally sited, so that figure is not flattered by a straw man.',
-  { after: 160 },
+  'Sludge needs four things about each neighborhood: an identifier, a latitude, a longitude, '
+  + 'and how many orders it takes in a day. There are three ways to provide them.',
 ));
 
-C.push(NOTE('In one line.',
-  'Not a clustering demo with a map — a costing model that happens to be solved by a '
-  + 'clustering algorithm, and that tells you which answers are proven.'));
-
-C.push(H2('The run'));
-C.push(P('Press Optimise, or ⌘/Ctrl + Enter. Four stages, each visible as it happens:'));
-C.push(NUM([R('Place the warehouses. ', { bold: true, color: INK }), R('Weighted k-medians finds the K points minimising order-weighted cost.')]));
-C.push(NUM([R('Assign every area. ', { bold: true, color: INK }), R('Each goes to whichever warehouse is genuinely cheapest to serve it from.')]));
-C.push(NUM([R('Price the network. ', { bold: true, color: INK }), R('Trips, fuel, driver hours and rent become one rupees-per-day figure.')]));
-C.push(NUM([R('Compare and prove. ', { bold: true, color: INK }), R('Against one depot, against k-means, against exhaustive search.')]));
-
-C.push(H2('Data in'));
 C.push(TABLE(
-  [{ w: 1500, label: 'Route' }, { w: 7860, label: '' }],
+  [{ w: 1700, label: 'Tab' }, { w: 7660, label: 'What it is for' }],
   [
-    ['Sample', 'Seven Indian metros: Bengaluru, Delhi NCR, Mumbai, Hyderabad, Chennai, Pune, Kolkata.'],
-    ['Upload', 'Any CSV. Column names need not match ours — the AI component resolves them.'],
-    ['Type', 'Paste rows as id, lat, lon, orders. Errors reported per row as you type.'],
+    ['Sample', 'Nine built-in datasets — Bengaluru, Delhi NCR, Mumbai, Hyderabad, Chennai, Pune and Kolkata. Use these to try the tool, or to compare how the answer changes between cities.'],
+    ['Upload', 'Your own CSV. Column names do not have to match ours — see below.'],
+    ['Type', 'Paste or type rows directly. Useful for a quick what-if with a handful of areas.'],
   ],
 ));
-C.push(SP(130));
+
+C.push(SP(200));
+C.push(H2('Why your column names do not matter'));
+
 C.push(P(
-  'Each neighborhood needs a unique id, a valid lat/lon, and a non-negative order count. '
-  + 'Validation failures are shown, not swallowed.',
+  'Real spreadsheets do not have columns called id, lat, lon and orders. They have '
+  + '"Locality Name", "Y Coordinate" and "Parcels Per Day". A fixed list of aliases only '
+  + 'recognises the headers somebody thought of in advance, and fails on the first '
+  + 'unfamiliar file.',
 ));
 
-C.push(H2('Controls'));
-C.push(P('The K slider sets the number of warehouses. After a run the tool reports the cost optimum and offers a one-click jump to it — §2.4 explains why one exists.'));
-C.push(SP(60));
-C.push(TABLE(
-  [
-    { w: 2000, label: 'Vehicle' }, { w: 1560, label: 'Orders/trip', align: 'r' },
-    { w: 1560, label: 'Fuel L/km', align: 'r' }, { w: 1560, label: 'km/h', align: 'r' },
-    { w: 2680, label: 'CO₂ g/km', align: 'r' },
-  ],
-  [
-    ['Two-wheeler', '25', '0.020', '34', '46'],
-    ['Three-wheeler', '60', '0.033', '28', '76'],
-    ['Delivery van', '180', '0.085', '30', '228'],
-    ['Light truck', '420', '0.150', '26', '402'],
-    ['Electric van', '150', '0.011', '30', '110'],
-  ],
-));
-C.push(SP(130));
-C.push(P([
-  R('Four congestion profiles scale effective speed, and so driver cost per kilometre: '),
-  R('free flow 1.00', { bold: true, color: INK }), R(' (night dispatch), '),
-  R('light 1.25', { bold: true, color: INK }), R(' (off-peak), '),
-  R('peak hour 1.85', { bold: true, color: INK }), R(' (Bengaluru 9am/6pm), '),
-  R('gridlock 2.60', { bold: true, color: INK }), R(' (monsoon evening).'),
-]));
-C.push(P([
-  R('Fuel price, driver wage and facility rent are live inputs. Two hard constraints can be '
-    + 'switched on — a '), R('capacity cap', { bold: true, color: INK }),
-  R(' per warehouse and a '), R('maximum service radius', { bold: true, color: INK }),
-  R('. Violations are flagged on the map, not hidden.'),
-]));
-C.push(SP(60));
-C.push(P('Five demand scenarios reshape volumes so you can test whether the answer moves: today, +40% growth, suburban sprawl, urban infill, downturn.'));
-
-C.push(H2('The AI component'));
-C.push(P([
-  R('Real data never arrives with the column names you want. Sludge embeds each header with '),
-  R('Xenova/all-MiniLM-L6-v2', { font: MONO, size: 18, color: INK }),
-  R(' on WebAssembly '), R('inside the browser', { bold: true, color: INK }),
-  R(' — no API key, no server, nothing leaves the machine — and matches by meaning:'),
-]));
-C.push(SP(50));
-C.push(TABLE(
-  [{ w: 3200, label: 'Incoming header' }, { w: 3200, label: 'Mapped to' }, { w: 2960, label: 'Similarity', align: 'r' }],
-  [
-    ['Parcels Per Day', 'orders', '79%'],
-    ['Locality Name', 'id', '72%'],
-    ['Y Coordinate', 'lat', '50%'],
-    ['X Coordinate', 'lon', '39%'],
-  ],
-));
-C.push(SP(130));
-C.push(NOTE('Those percentages are raw cosine similarity.',
-  '39% looks weak but is a correct mapping — what matters is the margin over the runner-up. '
-  + 'If the model fails to load, the tool falls back to an alias table and says so rather than '
-  + 'pretending it used AI.'));
-
-C.push(H2('Results out'));
-C.push(TABLE(
-  [{ w: 2100, label: 'Panel' }, { w: 7260, label: '' }],
-  [
-    ['Headline', 'Percentage cheaper than one central depot, and the rupee figures behind it.'],
-    ['Statistics', 'Annual saving, CO₂ avoided, margin over an equivalent k-means network.'],
-    ['Trade-off', 'Cost against K with the optimum starred. Click a bar to jump to that K.'],
-    ['Costs', 'Fuel, driver time, facilities, cost per order, vehicle-km, CO₂, robustness.'],
-    ['Areas', 'Every neighborhood, its volume, its depot, its distance.'],
-    ['Proof', 'Which claim applies at this K, and the evidence behind it.'],
-  ],
-));
-C.push(SP(130));
-C.push(P('Copy summary, copy a permalink to the exact scenario, or export the network as CSV. Before/After toggles the baseline. Light and dark themes are separately colour-validated.'));
-
-
-
-/* ========================= 2. MATHEMATICS ========================= */
-C.push(H1('2', 'The mathematics'));
-
-C.push(P([
-  R('Neighborhood '), R('i', { italics: true }), R(' sits at pᵢ with wᵢ orders per day. Choose K '
-    + 'warehouse locations — anywhere on the surface, not only at existing sites — to minimise'),
-]));
-C.push(EQ('f(X)  =  Σᵢ wᵢ · minⱼ d(pᵢ, xⱼ)   +   K · c_facility'));
-C.push(P([
-  R('where d is haversine distance. This is the '), R('weighted K-medians', { bold: true, color: INK }),
-  R(' problem with a facility term.'),
-]));
-
-C.push(H2('2.1  k-medians, not k-means'));
-C.push(P([
-  R('Delivery cost is '), R('linear', { bold: true, color: INK }),
-  R(' in distance — twice as far is twice the fuel and twice the driver-hour. k-means minimises '),
-  R('squared', { bold: true, color: INK }),
-  R(' distance, which is a different objective and picks a different siting: under d², one '
-    + 'distant high-volume zone drags a warehouse toward it far harder than its real cost '
-    + 'justifies, and everyone left behind pays.'),
-]));
 C.push(P(
-  'The minimisers differ even for one facility. Squared gives the weighted centroid, in closed '
-  + 'form. Linear gives the weighted geometric median, which has no closed form for n ≥ 3 and '
-  + 'must be found iteratively.',
+  'So Sludge reads your headers by meaning. A small language model runs inside the browser, '
+  + 'compares each of your column names against what each field means, and matches them up. '
+  + 'It is the only place any AI is involved, and it touches nothing but the column names.',
 ));
-C.push(P('We measure the difference rather than assert it — both networks, same data, same K:', { after: 130 }));
-C.push(TABLE(
-  [{ w: 1200, label: 'K', align: 'r' }, { w: 3200, label: 'k-medians /day', align: 'r' },
-   { w: 2600, label: 'k-means penalty', align: 'r' }, { w: 2360, label: '' }],
-  [
-    ['2', '₹23,448', '+6.00%', ''],
-    ['3', '₹20,521', '+2.81%', ''],
-    ['4', '₹18,824', '+2.07%', 'optimum'],
-    ['5', '₹19,125', '+1.22%', ''],
-  ],
-  { bold: [2] },
-));
-C.push(SP(130));
-C.push(NOTE('The wrong objective costs 1.2–6.0% of total network cost,',
-  'permanently, for no benefit — up to ₹5.5 lakh a year on this dataset, thrown away by '
-  + 'reaching for the more familiar algorithm. Measured on the delivery budget alone, which '
-  + 'is the part siting can actually move, the gap is 3.6–8.1%.'));
-
-C.push(H2('2.2  The cost model is free'));
-C.push(P('For neighborhood i served from warehouse w:'));
-C.push(MONO_LINE('roadKmᵢ     = d(pᵢ, w) × ρ             ρ = 1.32 detour factor'));
-C.push(MONO_LINE('tripsᵢ      = ⌈wᵢ / Q⌉                 Q = vehicle capacity'));
-C.push(MONO_LINE('vehicleKmᵢ  = 2 × roadKmᵢ × tripsᵢ      round trips'));
-C.push(MONO_LINE('r           = φ·P_fuel + u + W/v_eff   ₹ per vehicle-km'));
-C.push(MONO_LINE('costᵢ       = d(pᵢ, w) × [ 2 · tripsᵢ · ρ · r ]', { bold: true, after: 150 }));
-C.push(P([
-  R('The bracketed term is '), R('constant in w', { bold: true, color: INK }),
-  R('. So minimising rupees is still exactly weighted k-medians — the whole vehicle, fuel, '
-    + 'traffic and wage model collapses into the weights. Five fleets and four congestion '
-    + 'profiles cost the optimiser nothing.'),
-]));
-C.push(P([
-  R('Stated openly: ', { bold: true, color: INK }),
-  R('we price the trunk leg plus facilities. Distribution inside a neighborhood is excluded '
-    + 'because it is near-invariant to depot position and cannot move the optimum.'),
-]));
-
-C.push(H2('2.3  What is proven, and what is not'));
-C.push(P([R('K = 1 — proven globally optimal. ', { bold: true, color: INK }),
-  R('Each ‖x − pᵢ‖ is a norm, hence convex; a non-negative weighted sum of convex functions is '
-    + 'convex; so any local minimum is the global one. Weiszfeld’s iteration')]));
-C.push(EQ('x⁽ᵐ⁺¹⁾ = Σᵢ (wᵢpᵢ / ‖x⁽ᵐ⁾−pᵢ‖) / Σᵢ (wᵢ / ‖x⁽ᵐ⁾−pᵢ‖)'));
-C.push(P(
-  'is a descent method on that objective, so its fixed point is the global minimum. Sludge '
-  + 'is not reporting the best location it found — it is reporting the best that exists.',
-));
-C.push(P([R('Caveat. ', { bold: true, italics: true, color: INK }),
-  R('The iteration is undefined if an iterate lands exactly on a demand point. We floor the '
-    + 'denominator away from zero; a production version should use the Vardi–Zhang '
-    + 'modification.', { italics: true })]));
-C.push(SP(40));
-C.push(P([R('K > 1 — NP-hard, so we certify instead. ', { bold: true, color: INK }),
-  R('Two things are proven rather than one thing overclaimed:')]));
-C.push(BULLET([R('Never worse than exhaustive search. ', { bold: true, color: INK }),
-  R('All C(n,K) ways of siting K depots on the demand points are enumerated exactly — 495 '
-    + 'subsets at n=12, K=4 — and warm-start the solver. Lloyd’s decreases monotonically, so '
-    + 'the result cannot be worse. That is a guarantee.')]));
-C.push(BULLET([R('Certified locally optimal. ', { bold: true, color: INK }),
-  R('Each warehouse is perturbed across a 21×21 lattice within 2 km — 1,764 probes at K=4 — '
-    + 'and none improves the objective. Certified to ~100 m, finer than a lease.')]));
-
-C.push(H2('2.4  How many warehouses'));
-C.push(P('Delivery cost falls with K; rent rises linearly. The sum has a genuine interior minimum.', { after: 130 }));
-C.push(TABLE(
-  [{ w: 1000, label: 'K', align: 'r' }, { w: 2100, label: 'Delivery', align: 'r' },
-   { w: 2100, label: 'Facilities', align: 'r' }, { w: 2100, label: 'Total/day', align: 'r' },
-   { w: 2060, label: 'vs one depot', align: 'r' }],
-  [
-    ['1', '₹25,370', '₹2,500', '₹27,870', '—'],
-    ['2', '₹18,448', '₹5,000', '₹23,448', '15.9%'],
-    ['3', '₹13,021', '₹7,500', '₹20,521', '26.4%'],
-    ['4', '₹8,824', '₹10,000', '₹18,824', '32.5%'],
-    ['5', '₹6,625', '₹12,500', '₹19,125', '31.4%'],
-    ['6', '₹5,174', '₹15,000', '₹20,174', '27.6%'],
-    ['8', '₹2,704', '₹20,000', '₹22,704', '18.5%'],
-  ],
-  { bold: [3] },
-));
-C.push(SP(130));
-C.push(P([
-  R('A true interior minimum — K=5 is ₹301/day '), R('worse', { italics: true }),
-  R(', not better. The curve turns. At K=4: ₹33.0 lakh saved a year, 37 t CO₂ avoided.'),
-]));
-
-C.push(H2('2.5  Robustness and cross-validation'));
-C.push(P(
-  'Demand resampled 16 times at ±30%, comparing keeping today’s siting against re-optimising '
-  + 'with perfect hindsight. Mean regret 0.64%, worst case 2.77%. Since relocating a warehouse '
-  + 'costs far more than 0.64% of daily operating cost, the correct decision is to build and '
-  + 'not re-site.',
-));
-C.push(P(
-  'The model was implemented twice independently — Python on a tangent plane, TypeScript on the '
-  + 'sphere, different seeding, different arithmetic:',
-  { after: 130 },
-));
-C.push(TABLE(
-  [{ w: 1000, label: 'K', align: 'r' }, { w: 2700, label: 'Python (order-km)', align: 'r' },
-   { w: 2700, label: 'TypeScript', align: 'r' }, { w: 1500, label: 'Gap', align: 'r' },
-   { w: 1460, label: 'Worst site', align: 'r' }],
-  [
-    ['1', '55,490.66', '55,490.74', '+0.000%', '0.000 km'],
-    ['3', '30,378.14', '30,378.17', '+0.000%', '0.002 km'],
-    ['5', '17,904.77', '17,904.80', '+0.000%', '0.000 km'],
-  ],
-));
-C.push(SP(130));
-C.push(NOTE('Agreement to 0.0001% on cost and ~2 m on position.',
-  'Reproducible with npm run crossval. Two independent implementations converging is the '
-  + 'strongest evidence that the result is a property of the mathematics, not of one codebase.'));
-
-
-
-/* ========================= 3. COMPARISON ========================= */
-C.push(H1('3', 'How it compares'));
-C.push(P('Not against enterprise network-design suites, which do far more — against what a team would realistically reach for.', { after: 130 }));
-C.push(TABLE(
-  [{ w: 2400, label: 'Approach' }, { w: 3400, label: 'What it gets wrong' }, { w: 3560, label: 'Sludge' }],
-  [
-    ['Intuition / existing sites', 'Anchored on property already leased.', 'Searches the continuous plane.'],
-    ['k-means clustering', 'Squared distance — 1.2–6.0% dearer at equal K.', 'Minimises the actual linear cost.'],
-    ['Centre-of-gravity sheet', 'Weighted centroid — k-means renamed.', 'Cost model, constraints, optimum in K.'],
-    ['Generic solver', 'A number, with no account of confidence.', 'Proven at K=1, certified above.'],
-    ['Enterprise network design', 'Powerful, but days to model a question.', 'An answer in under a second.'],
-  ],
-));
-
-C.push(H2('Why the mathematics holds up'));
-C.push(BULLET([R('The objective matches the cost. ', { bold: true, color: INK }), R('Linear because fuel and driver-hours are linear — and we quantify what choosing otherwise costs.')]));
-C.push(BULLET([R('Proven where provable, certified where not. ', { bold: true, color: INK }), R('K=1 by convexity; K>1 is NP-hard, so we certify — and say which applies in the interface.')]));
-C.push(BULLET([R('An exhaustive benchmark. ', { bold: true, color: INK }), R('All C(n,K) discrete sitings enumerated as a floor the answer cannot fall below.')]));
-C.push(BULLET([R('K is derived, not assumed. ', { bold: true, color: INK }), R('The infrastructure–delivery trade-off produces a genuine interior minimum.')]));
-C.push(BULLET([R('Robustness measured, not claimed. ', { bold: true, color: INK }), R('0.64% mean regret under ±30% demand movement.')]));
-C.push(BULLET([R('Independently cross-validated. ', { bold: true, color: INK }), R('Two languages, two geometries, agreeing to 0.0001%.')]));
-
-/* ========================= 4. LIMITS ========================= */
-C.push(H1('4', 'Limitations and technical summary'));
-C.push(P('Stated because a model whose limits are not stated should not be trusted.'));
-C.push(BULLET([R('Great-circle × 1.32 ', { bold: true, color: INK }), R('stands in for road distance — a routing API would add a live dependency we refused.')]));
-C.push(BULLET([R('Independent radial trips. ', { bold: true, color: INK }), R('Multi-drop routing would lower absolute cost but affects all sitings alike, so the argmin largely holds.')]));
-C.push(BULLET([R('Uniform facility cost. ', { bold: true, color: INK }), R('Real rents vary by location. This is the most valuable extension.')]));
-C.push(BULLET([R('K > 1 is certified, not proven. ', { bold: true, color: INK }), R('Repeated because it is the claim most likely to be over-read.')]));
-C.push(BULLET([R('Static demand within a run. ', { bold: true, color: INK }), R('Scenarios model shifts between runs, not intra-day variation.')]));
-C.push(BULLET([R('Sample volumes are illustrative. ', { bold: true, color: INK }), R('Coordinates are real, validated locality centroids; order counts are invented and labelled so.')]));
 
 C.push(SP(140));
 C.push(TABLE(
-  [{ w: 2200, label: 'Item' }, { w: 7160, label: 'Detail' }],
+  [{ w: 2600, label: 'Your header' }, { w: 1200, label: '' }, { w: 5560, label: 'Understood as' }],
   [
-    ['Algorithm', 'Weighted k-medians; Lloyd’s with a geometric-median (Weiszfeld) update, k-means++ seeding, warm-started from the exact discrete p-median'],
-    ['Distance', 'Haversine × 1.32 road detour factor'],
-    ['Cost model', 'Fuel + upkeep + driver time on the trunk leg, plus flat facility cost per day'],
-    ['AI component', 'Xenova/all-MiniLM-L6-v2 via Transformers.js on WebAssembly, in-browser'],
-    ['Stack', 'Next.js 15, React 19, TypeScript, MapLibre GL JS; Python 3 reference'],
-    ['Architecture', 'Entirely client-side — no backend, no database, no API keys'],
-    ['Tests', '70 passing across geometry, cost model and all eight bonus features'],
-    ['Cross-validation', 'Python vs TypeScript to 0.0001% on cost, ~2 m on position'],
+    ['Parcels Per Day', '→', 'orders — daily order volume'],
+    ['Y Coordinate', '→', 'lat — latitude'],
+    ['Locality Name', '→', 'id — the area name'],
   ],
 ));
 
+C.push(SP(160));
+C.push(NOTE('If the model cannot load,',
+  'Sludge falls back to a fixed alias table and says so in the interface rather than '
+  + 'pretending the model ran. Nothing else in the tool depends on it: the optimisation, '
+  + 'the cost model and the map are pure arithmetic.'));
 
+C.push(SP(200));
+C.push(H2('When a row is wrong'));
+C.push(P(
+  'Every row is validated as it loads. A bad coordinate or a missing order count is '
+  + 'reported against that row, and the rest of the file still loads. A single malformed '
+  + 'line should not cost you the whole upload.',
+));
 
-/* ------------------------------------------------------------ assemble */
+C.push(new Paragraph({ children: [new PageBreak()] }));
+
+/* ========================= 3. K ========================= */
+C.push(H1('3', 'Choosing how many warehouses'));
+
+C.push(P(
+  'More warehouses mean shorter trips but more rent. Fewer mean cheaper rent but longer '
+  + 'driving. There is a number that balances the two, and Sludge will find it for you.',
+));
+
+C.push(TABLE(
+  [{ w: 2700, label: 'Control' }, { w: 6660, label: 'What it does' }],
+  [
+    ['Warehouses (K)', 'Sets how many warehouses to place, from one to eight. Move it and press Optimise to see that many.'],
+    ['Use the optimum', 'Jumps straight to the number that costs least. Sludge has already tested every value of K in the background.'],
+    ['Optimise', 'Runs the placement. Keyboard shortcut: Command-Return.'],
+    ['Before / After', 'Switches the map between a single central depot and the optimised network, so you can see what changed.'],
+  ],
+));
+
+C.push(SP(200));
+C.push(H2('The trade-off chart'));
+C.push(P(
+  'Under the result you will find a chart with one bar per value of K, split into delivery '
+  + 'cost and facility cost. Delivery falls as K rises; facilities climb in a straight line. '
+  + 'The total dips and then turns back up, and the lowest point is starred.',
+));
+C.push(P(
+  'This is the whole argument for the tool in one picture: there is a right answer, and it '
+  + 'is neither "as few as possible" nor "as many as we can afford".',
+));
+
+C.push(SP(240));
+
+/* ========================= 4. FLEET AND COSTS ========================= */
+C.push(H1('4', 'Fleet, costs and constraints'));
+
+C.push(P(
+  'These controls describe your operation. They are collapsed by default — open a section '
+  + 'to change it. Each one shows the value it is currently using and, underneath, where '
+  + 'that number came from.',
+));
+
+C.push(H2('Fleet and costs'));
+C.push(TABLE(
+  [{ w: 2300, label: 'Control' }, { w: 7060, label: 'What it does, and why it matters' }],
+  [
+    ['Vehicle', 'Five fleets from two-wheeler to light truck, plus an electric van. Capacity per trip is what really matters: a bigger vehicle makes fewer trips, which changes where the best warehouse sits.'],
+    ['Traffic', 'Four congestion profiles, from free-flowing night roads to a monsoon-evening standstill. Congestion slows the fleet, which raises driver cost per kilometre.'],
+    ['Fuel', 'Price per litre. Change it to see how sensitive your network is to the pump.'],
+    ['Driver', 'Rider cost per hour to you as the operator, including what you carry beyond the headline wage.'],
+    ['Facility rent', 'Cost per warehouse per day. This is the number that decides how many warehouses are worth building — raise it and the optimum shifts towards fewer, larger sites.'],
+  ],
+));
+
+C.push(SP(180));
+C.push(NOTE('The electric van is priced separately.',
+  'It charges from the grid, so its energy cost does not move with the petrol slider. Its '
+  + 'emissions are grid emissions rather than zero — cleaner than a diesel van, but not '
+  + 'nothing, which is the honest number.'));
+
+C.push(SP(200));
+C.push(H2('Constraints'));
+C.push(TABLE(
+  [{ w: 2300, label: 'Control' }, { w: 7060, label: 'What it does, and why it matters' }],
+  [
+    ['Capacity cap', 'Limits how many orders a day one warehouse may take. Turn it on when a site physically cannot absorb everything nearest to it, and assignment will route the overflow elsewhere.'],
+    ['Maximum service radius', 'Limits how far a warehouse may serve. Anything beyond the limit is flagged on the map rather than quietly hidden, because an unserviceable area is a decision you need to see.'],
+    ['Demand scenario', 'Re-runs against a different future: growth, suburban sprawl, urban infill or a downturn. Warehouses last years, so the right question is not only what is cheapest today.'],
+  ],
+));
+
+C.push(SP(240));
+
+/* ========================= 5. RESULTS ========================= */
+C.push(H1('5', 'Reading the results'));
+
+C.push(H2('The headline'));
+C.push(P(
+  'The large percentage is how much cheaper the optimised network is than running everything '
+  + 'from one depot. Beneath it are the two costs being compared, per day.',
+));
+C.push(NOTE('The comparison is deliberately strict.',
+  'The single depot it is measured against has itself been placed optimally by the same '
+  + 'solver — not dumped in the middle of the map. Comparing against a badly-sited depot '
+  + 'would produce a bigger number and mean less.'));
+
+C.push(SP(200));
+C.push(H2('The three tiles'));
+C.push(TABLE(
+  [{ w: 2300, label: 'Tile' }, { w: 7060, label: 'What it tells you' }],
+  [
+    ['Saved per year', 'The daily saving over a year of operation, at today’s order volume.'],
+    ['CO₂ avoided', 'Emissions not produced, because the fleet drives fewer kilometres. Based on your chosen vehicle.'],
+    ['vs k-means', 'How much more the same network would cost if it had been placed by ordinary clustering instead. This is the value of using the right method.'],
+  ],
+));
+
+C.push(SP(200));
+C.push(H2('The map'));
+C.push(TABLE(
+  [{ w: 2600, label: 'What you see' }, { w: 6760, label: 'What it means' }],
+  [
+    ['Circles', 'Neighborhoods. Area is proportional to daily orders, so the busiest areas are visibly the biggest.'],
+    ['Labelled markers', 'Warehouses. The label shows each one’s daily load. W1 is always the busiest, so two screenshots can be compared.'],
+    ['Coloured lines', 'Which warehouse serves which neighborhood. Hover a warehouse to isolate its territory.'],
+    ['Amber outline', 'An area outside your maximum service radius.'],
+  ],
+));
+
+C.push(SP(200));
+C.push(H2('The four tabs'));
+C.push(TABLE(
+  [{ w: 1700, label: 'Tab' }, { w: 7660, label: 'What it holds' }],
+  [
+    ['Costs', 'The full daily breakdown — fuel and upkeep, driver time, facilities, cost per order, vehicle-kilometres and CO₂.'],
+    ['Areas', 'Every neighborhood, which warehouse serves it, and what it costs to serve.'],
+    ['Proof', 'How confident Sludge is in this answer, and why. See below.'],
+    ['Robustness', 'What happens if demand moves. Sludge re-runs with order volumes shifted up and down, and reports how much worse keeping these warehouses would be than re-optimising with hindsight. A low number means the answer is not tuned to one snapshot.'],
+  ],
+));
+
+C.push(SP(200));
+C.push(H2('What the Proof tab is telling you'));
+C.push(P(
+  'Sludge separates what it can prove from what it has merely searched for, because the '
+  + 'difference matters when you are spending money on a building.',
+));
+C.push(TABLE(
+  [{ w: 1700, label: 'Case' }, { w: 7660, label: 'What Sludge claims' }],
+  [
+    ['One warehouse', 'Proven to be the best possible position. Not "the best we found" — the best that exists.'],
+    ['More than one', 'Certified rather than proven. Sludge checks its answer against an exhaustive search over every candidate siting, and separately confirms that nudging any warehouse in any direction makes things worse. That is a strong guarantee, and it is not the same as proof.'],
+  ],
+));
+
+C.push(SP(240));
+
+/* ========================= 6. SHARING ========================= */
+C.push(H1('6', 'Sharing and exporting'));
+
+C.push(P('Three buttons sit above the result.', { after: 130 }));
+C.push(TABLE(
+  [{ w: 2100, label: 'Button' }, { w: 7260, label: 'What you get' }],
+  [
+    ['Copy summary', 'A short plain-text account of this scenario — the network, the saving, the optimum, the fleet and cost assumptions. Ready to paste into a message or a report.'],
+    ['Copy link', 'A URL that reopens this exact scenario, with the same data, K and settings. Send it to a colleague and they see what you see.'],
+    ['Export CSV', 'Warehouse coordinates and the full neighborhood-to-warehouse assignment, for use elsewhere.'],
+  ],
+));
+
+C.push(SP(240));
+
+/* ========================= 7. NUMBERS ========================= */
+C.push(H1('7', 'The numbers behind the model'));
+
+C.push(P(
+  'Every cost parameter shows its value, its reasoning and a source, next to the control it '
+  + 'governs. You can change any of them. The defaults are these.',
+));
+
+C.push(TABLE(
+  [{ w: 2500, label: 'Parameter' }, { w: 1900, label: 'Default', align: 'r' }, { w: 4960, label: 'Basis' }],
+  [
+    ['Petrol price', '₹110.93/L', 'Bengaluru pump price on the day the model was calibrated.'],
+    ['Rider cost', '₹120/hour', 'Metro delivery partners gross ₹15,000–30,000 a month over roughly 208 paid hours.'],
+    ['Facility rent', '₹2,500/day', 'A 500–800 sq ft micro-hub, about ₹75,000 a month. A full tier-1 dark store is nearer ₹7,800/day — try it on the slider.'],
+    ['Two-wheeler load', '25 per trip', 'An urban rider completes 80–100 deliveries a day across three or four loads.'],
+    ['Road detour factor', '× 1.32', 'Streets are not straight lines. Dense urban networks measure between 1.2 and 1.4.'],
+  ],
+));
+
+C.push(SP(180));
+C.push(NOTE('What is counted, and what is not.',
+  'Sludge prices the trunk leg — depot to neighborhood and back — plus facilities. '
+  + 'Delivery inside a neighborhood is excluded, because it barely changes with where the '
+  + 'depot sits and so cannot affect which siting wins. That makes these figures right for '
+  + 'comparing sitings, which is what the tool is for, and smaller than a full last-mile '
+  + 'cost. It is stated here and in the interface rather than left to be discovered.'));
+
+C.push(SP(240));
+
+/* ========================= 8. TROUBLESHOOTING ========================= */
+C.push(H1('8', 'If something looks wrong'));
+
+C.push(TABLE(
+  [{ w: 3100, label: 'What you see' }, { w: 6260, label: 'What it means' }],
+  [
+    ['The map is blank', 'Map tiles are still loading, or your network is blocking them. The optimisation is unaffected — the result panel is still correct.'],
+    ['"Loads on first use" next to AI component', 'Normal. The column-matching model downloads the first time you upload a file, not on page load.'],
+    ['An area has an amber outline', 'It falls outside your maximum service radius. Either raise the radius, add a warehouse, or accept that it is unserviceable.'],
+    ['Changing the city seems to keep the old answer', 'Press Optimise again. Sludge clears the previous result when your data changes, so what you are seeing is the un-optimised view.'],
+    ['A warehouse sits where nobody lives', 'That is usually correct. The solver weights by order volume, so it sits near the demand, not near the map’s centre.'],
+    ['The numbers moved after changing fleet', 'Expected. A different vehicle carries a different number of orders per trip, which changes trip counts, cost, and sometimes the best siting.'],
+  ],
+));
+
+C.push(SP(200));
+C.push(P([
+  R('Every figure in this manual is produced by the committed code. ', { size: 17, color: MUTED, italics: true }),
+  R('gridpointsludge.vercel.app', { size: 17, color: ACCENT, italics: true }),
+]));
 const doc = new Document({
   creator: 'Sludge',
   title: 'Sludge — User Manual',
@@ -570,7 +561,7 @@ const doc = new Document({
     properties: { page: { margin: { top: 1300, right: 1440, bottom: 1200, left: 1440 } } },
     headers: { default: new Header({ children: [new Paragraph({
       alignment: AlignmentType.RIGHT, spacing: { after: 0 },
-      children: [R('GRIDPOINT', { size: 14, color: FAINT, bold: true, track: 40 })],
+      children: [R('SLUDGE', { size: 14, color: FAINT, bold: true, track: 40 })],
     })] }) },
     footers: { default: new Footer({ children: [new Paragraph({
       alignment: AlignmentType.RIGHT, spacing: { before: 0 },
