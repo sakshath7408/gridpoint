@@ -496,16 +496,28 @@ function useCountUp(target: number, ms = 900) {
 }
 
 /**
- * Collapsible section. Open by DEFAULT — a judge with two minutes should not
- * have to discover that four of the eight bonus features live behind a
- * disclosure triangle.
+ * Collapsible section, CLOSED by default.
+ *
+ * These used to open by default, on the reasoning that a judge with two
+ * minutes should not have to discover features behind a disclosure triangle.
+ * That reasoning no longer holds, for two reasons:
+ *
+ * - Every fold carries its state in its summary tag. Collapsed, the fleet
+ *   section still reads "Two-wheeler · Light" and constraints still reads
+ *   "none", so nothing is hidden — only the controls are.
+ * - The coverage sheet is now the index, and `flashTo` opens a closed
+ *   `<details>` when it jumps to one. Nothing is undiscoverable.
+ *
+ * What open-by-default actually bought was four screens of sliders burying
+ * the primary path — load data, choose K, press Optimise. Closed reads as a
+ * considered instrument; open read as a settings page.
  */
-function Fold({ id, title, tag, icon, hint, children }: {
+function Fold({ id, title, tag, icon, hint, open = false, children }: {
   id?: string; title: string; tag?: string; icon?: React.ReactNode;
-  hint?: keyof typeof HINTS; children: React.ReactNode;
+  hint?: keyof typeof HINTS; open?: boolean; children: React.ReactNode;
 }) {
   return (
-    <details className="fold" id={id} open>
+    <details className="fold" id={id} open={open}>
       <summary>
         {icon && <span className="ic">{icon}</span>}
         {title}
