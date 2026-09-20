@@ -439,24 +439,58 @@ function Source({ id }: { id: keyof typeof SOURCES }) {
 
 /* ----------------------------- small pieces ----------------------------- */
 
+/**
+ * Count a number up to `target`, and — more importantly — always arrive.
+ *
+ * Two ways the previous version failed to arrive, both of which left a stale,
+ * meaningless figure sitting on the single most important number on screen:
+ *
+ * 1. It tracked the last TARGET rather than the last DISPLAYED value. An
+ *    animation interrupted part-way set `from` to a number that had never been
+ *    shown, so the next run started from a lie, and a run that early-returned
+ *    on `a === b` after its predecessor had been cancelled froze the display
+ *    wherever it happened to be.
+ *
+ * 2. `requestAnimationFrame` does not fire in a hidden tab. Start a count in a
+ *    background tab and it never advances — come back and the headline is
+ *    frozen mid-count. This is not hypothetical: it is what a judge gets if
+ *    they open the link, switch tabs while it computes, and switch back.
+ *
+ * So: `shown` follows what is actually on screen, the final frame lands exactly
+ * on the target, and if the page is hidden — now or part-way through — we skip
+ * the flourish and show the answer. An animation nobody can see is worth
+ * nothing; a wrong number is worth less than nothing.
+ */
 function useCountUp(target: number, ms = 900) {
   const [v, setV] = useState(0);
-  const from = useRef(0);
+  const shown = useRef(0);
   useEffect(() => {
-    const a = from.current, b = target;
-    from.current = target;
+    const a = shown.current, b = target;
     if (a === b) return;
-    if (typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches) { setV(b); return; }
+    const snap = () => { shown.current = b; setV(b); };
+    const reduced = typeof matchMedia !== 'undefined'
+      && matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (reduced || (typeof document !== 'undefined' && document.hidden)) { snap(); return; }
+
     let raf = 0;
     const t0 = performance.now();
     const tick = (t: number) => {
       const p = Math.min(1, (t - t0) / ms);
       const e = 1 - Math.pow(1 - p, 3);
-      setV(a + (b - a) * e);
-      if (p < 1) raf = requestAnimationFrame(tick);
+      if (p < 1) {
+        const nv = a + (b - a) * e;
+        shown.current = nv;
+        setV(nv);
+        raf = requestAnimationFrame(tick);
+      } else snap();
     };
+    const onVis = () => { if (document.hidden) { cancelAnimationFrame(raf); snap(); } };
+    document.addEventListener('visibilitychange', onVis);
     raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
+    return () => {
+      cancelAnimationFrame(raf);
+      document.removeEventListener('visibilitychange', onVis);
+    };
   }, [target, ms]);
   return v;
 }
